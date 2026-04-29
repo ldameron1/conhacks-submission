@@ -1,111 +1,68 @@
-# Route Rehearsal — Handoff Document
+# Route Rehearsal — Handoff Document (Resumable)
 
-**Last Updated**: 2026-04-29T12:02:00Z  
-**Agent**: Antigravity (Claude Opus 4.6)  
-**Previous Agent**: Antigravity (Gemini 3.1-Pro)  
+**Last Updated**: 2026-04-29T12:15:00Z  
+**Agent**: Claude Opus 4.6 (Handing off to Gemini 3 Flash)  
 **Conversation**: 7ec50569-eb76-4225-9441-eb57dbdd1932
 
 ---
 
-## Current State
+## 🚀 Current State & Built Features
 
-The app is a fully working route rehearsal tool with:
-1. Route input with example chips, geocoding, OSRM routing
-2. Hazard scanning (geometry + OSRM steps + Gemini AI analysis)
-3. Report screen with dark map + hazard markers
-4. **CesiumJS 3D practice mode** with Google Photorealistic 3D Tiles
-5. **ElevenLabs voice narration** — instructor-style TTS for each hazard
-6. **Auto-drive mode** — car advances automatically, user focuses on awareness
-7. **Post-run recap** — confidence score, hazard-by-hazard breakdown, retry
+The application is a high-fidelity 3D driving rehearsal tool. All core rehearsal logic is functional.
 
-### Running
-```bash
-cd ~/conhacks-submission
-LIBGL_ALWAYS_SOFTWARE=0 GALLIUM_DRIVER="" python3 -m http.server 8080
-# Open http://localhost:8080/ in Firefox (launched with same env vars)
-```
+### Core Features (Completed)
+- **3D Engine (CesiumJS)**: Tiered loading (Google Photorealistic 3D Tiles → OSM Buildings → Flat Satellite).
+- **Auto-Drive System**: Car advances automatically; user focuses on awareness. Brake (B key) pauses.
+- **ElevenLabs Narration**: Instructor voice guides users through hazards (pre-generated).
+- **Distraction Simulation**: Optional "Intense" difficulty with screaming kids, bickering spouse, and radio chatter to test cognitive load.
+- **Recap Screen**: Post-run confidence score, hazard breakdown (reviewed vs. missed), and stats.
+- **GPU Fix**: Hardware acceleration forced via `LIBGL_ALWAYS_SOFTWARE=0`.
 
-### GPU Note
-This system has an **AMD Radeon Vega GPU** but the display manager sets `LIBGL_ALWAYS_SOFTWARE=1`.
-Firefox must be launched with: `LIBGL_ALWAYS_SOFTWARE=0 GALLIUM_DRIVER="" firefox`
+### Last Successful Steps
+- Verified Cesium ion token works for Google Earth-quality cities.
+- Successfully wired the 3-tier difficulty system (Calm, Moderate, Intense).
+- Implemented `narration.js` and `distractions.js` as independent modules.
 
 ---
 
-## Architecture
+## 🛠 Active Tasks (Next Steps)
 
-```
-index.html         — UI (CSS inline, 5 screens: input, scanning, report, practice, recap)
-app.js             — Main logic: geocoding, routing, scanning, auto-drive, recap
-hazard-scanner.js  — Route analysis: turns, lanes, signage, clusters
-cesium-view.js     — CesiumJS 3D engine with tiered tileset loading
-narration.js       — ElevenLabs TTS: pre-generation, queue playback, mute
-```
+The following tasks were requested by the user immediately before this handoff:
 
-### 3D Tile Loading Cascade (cesium-view.js)
-```
-Has Cesium Ion Token?
-  ├─ YES → Google Photorealistic 3D Tiles (Google Earth look)
-  │        ├─ Success → Full immersive 3D cities ✅
-  │        └─ Fail → OSM Buildings → Flat satellite
-  └─ NO  → Flat satellite (Esri World Imagery)
-```
+### 1. Accident Data Integration
+- **Goal**: Pull real-world crash/accident data to identify "danger zones" along the route.
+- **Research Results**: 
+    - **Overpass API (OSM)**: Can query `hazard=*` or `danger=*` within `(around:distance)` of the route.
+    - **NHTSA/FARS**: Federal fatality data available via API (needs key/setup).
+    - **Socrata/Open Data**: Many cities (NYC, etc.) have geocoded crash APIs.
+- **Action**: Modify `hazard-scanner.js` or create `accident-scanner.js` to fetch and overlay this data.
 
-### APIs Used (ALL FREE, $0)
-| API | Purpose | Token |
-|-----|---------|-------|
-| CesiumJS | 3D engine | CDN |
-| Cesium ion | Google 3D Tiles streaming | Free account |
-| ElevenLabs | Voice narration | Free tier key |
-| OSRM | Route computation | No |
-| Nominatim | Geocoding | No |
-| CartoDB | Dark map tiles | No |
-| Esri | Satellite imagery | No |
-| Gemini | AI hazard analysis | Free tier key |
+### 2. Phone Companion App (Controller)
+- **Goal**: Use the phone as a steering wheel (gyro) and touch interface (brake, gas, signals, wipers).
+- **Status**: 
+    - Samsung Galaxy is connected via USB (`lsusb` sees it as Samsung Galaxy series).
+    - `adb devices` did not list it yet (check Developer Options/USB Debugging).
+    - User suggested using **ngrok** for the tunnel.
+- **Action**: 
+    - Set up a small Socket.io or WebRTC bridge.
+    - Create a `/controller` mobile-friendly page.
+    - Map phone gyro `beta`/`gamma` to `headingOffset` in `cesium-view.js`.
 
 ---
 
-## Feature Summary
+## 📦 Technical Environment
+- **Local Server**: `python3 -m http.server 8080`
+- **GPU Overrides**: `LIBGL_ALWAYS_SOFTWARE=0 GALLIUM_DRIVER=""` (Essential for 3D performance).
+- **IP Address**: `10.144.148.140` (Internal).
+- **API Keys**: All stored in `CONFIG` block at top of `app.js`.
 
-### Working ✅
-- Route input + example chips
-- Geocoding + OSRM routing
-- Hazard scanning (geometry + AI)
-- Lane positioning + confusing signage detection
-- Report screen with Leaflet dark map
-- CesiumJS 3D practice (Overview/Drive/PiP modes)
-- Google Photorealistic 3D Tiles
-- WASD/arrow look controls
-- **Auto-drive**: car advances at constant speed, "▶ Start Driving" button
-- **Brake**: B key to pause auto-drive
-- **ElevenLabs narration**: instructor voice on hazard approach, pre-generated
-- **Mute toggle** in HUD
-- **HUD**: speed, progress, hazard distance, alert banner
-- **Recap screen**: confidence score (0-100), hazard breakdown (reviewed/missed), time, route completion %, retry button
-- 2D Leaflet fallback if WebGL fails
-- GPU rendering fix (AMD Radeon, env var override)
+---
 
-### Planned (Not Built)
-1. **Phone controller** — gyro steering (left/right tilt), touch controls for brake/gas/turn signal/wipers
-2. **Speed limit from OSRM** — auto-drive at actual posted speed
-3. **ElevenLabs distraction sim** — phone calls, passenger chatter
-4. **Virtual traffic** — animated entities for difficulty tiers
-5. **Night mode toggle** — change CesiumJS clock
-6. **Retry comparison** — side-by-side Run 1 vs Run 2
+## 📂 Key Files
+- `app.js`: Main state and Auto-Drive/Recap logic.
+- `cesium-view.js`: 3D rendering and camera control.
+- `narration.js`: ElevenLabs TTS handler for hazards.
+- `distractions.js`: ElevenLabs TTS handler for cognitive load.
+- `hazard-scanner.js`: Geometry-based hazard detection.
 
-## Key Files
-- `app.js:6-14` — API keys (Cesium, ElevenLabs, Gemini)
-- `cesium-view.js:89-136` — Tiered 3D tile loading
-- `narration.js` — Full ElevenLabs TTS module
-- `app.js:512-578` — Auto-drive system
-- `app.js:580-647` — Recap scoring + rendering
-- `hazard-scanner.js:167-279` — Lane/signage detection
-
-## Changes This Session (Claude Opus 4.6)
-1. Google Photorealistic 3D Tiles via Cesium ion
-2. ElevenLabs voice narration module
-3. Auto-drive mode with brake key
-4. Post-run recap with confidence scoring
-5. HUD: speed display, mute toggle, auto-drive controls
-6. GPU fix (LIBGL_ALWAYS_SOFTWARE override)
-7. 2D satellite fallback
-8. Esri imagery fix for globe
+**Note to Next Agent**: Start by troubleshooting the `adb` connection to the Samsung device to begin the Phone Controller task, or implement the Overpass API query for accident data.

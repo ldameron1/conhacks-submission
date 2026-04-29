@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Route Rehearsal — Controller</title>
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: rgba(255,255,255,0.06);
+      --surface2: rgba(255,255,255,0.10);
+      --accent: #00d4aa;
+      --accent2: #0088ff;
+      --danger: #ff4466;
+      --warning: #ffaa00;
+      --text: #e8edf3;
+      --text2: #94a3b8;
+      --border: rgba(255,255,255,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      touch-action: none;
+    }
+
+    /* ─── Join Screen ─── */
+    .join-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      gap: 20px;
+    }
+    .join-screen.hidden { display: none; }
+    .brand {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .join-input {
+      width: 100%;
+      max-width: 280px;
+      padding: 16px;
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 0.15em;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      outline: none;
+      text-transform: uppercase;
+    }
+    .join-input:focus { border-color: var(--accent); }
+    .join-btn {
+      width: 100%;
+      max-width: 280px;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 14px;
+      color: #0a0e17;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .join-btn:active { transform: scale(0.97); }
+    .status-msg {
+      font-size: 14px;
+      color: var(--text2);
+      text-align: center;
+      min-height: 20px;
+    }
+    .status-msg.connected { color: var(--accent); }
+    .status-msg.error { color: var(--danger); }
+
+    /* ─── Controller Screen ─── */
+    .ctrl-screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+    }
+    .ctrl-screen.active { display: flex; }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 4px;
+    }
+    .room-label {
+      font-size: 13px;
+      color: var(--text2);
+    }
+    .room-code {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+    }
+    .disconnect-btn {
+      font-size: 12px;
+      padding: 6px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text2);
+    }
+
+    /* ─── Gyro Visualizer ─── */
+    .gyro-hud {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .gyro-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .gyro-fill {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 50%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width 0.1s linear, left 0.1s linear;
+      border-radius: 4px;
+    }
+    .gyro-label {
+      font-size: 12px;
+      color: var(--text2);
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .gyro-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    /* ─── Pedals ─── */
+    .pedals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex: 1;
+    }
+    .pedal {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 800;
+      border-radius: 16px;
+      border: 2px solid var(--border);
+      user-select: none;
+      -webkit-user-select: none;
+      transition: transform 0.08s, background 0.15s;
+    }
+    .pedal.brake {
+      background: rgba(255,68,102,0.12);
+      color: var(--danger);
+      border-color: rgba(255,68,102,0.3);
+    }
+    .pedal.gas {
+      background: rgba(0,212,170,0.12);
+      color: var(--accent);
+      border-color: rgba(0,212,170,0.3);
+    }
+    .pedal:active, .pedal.active {
+      transform: scale(0.95);
+      opacity: 0.85;
+    }
+    .pedal-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .pedal-label span {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ─── Signals ─── */
+    .signals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .signal {
+      padding: 14px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text2);
+      user-select: none;
+    }
+    .signal.active-left { border-color: var(--warning); color: var(--warning); background: rgba(255,170,0,0.12); }
+    .signal.active-right { border-color: var(--accent2); color: var(--accent2); background: rgba(0,136,255,0.12); }
+
+    /* ─── Permissions Overlay ─── */
+    .perm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 1000;
+      padding: 24px;
+      text-align: center;
+    }
+    .perm-overlay.visible { display: flex; }
+    .perm-overlay h3 { font-size: 18px; }
+    .perm-overlay p { font-size: 14px; color: var(--text2); }
+    .perm-btn {
+      padding: 14px 28px;
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      color: #0a0e17;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Join Screen -->
+  <div id="join-screen" class="join-screen">
+    <div class="brand">Route Rehearsal</div>
+    <p style="font-size:14px;color:var(--text2);text-align:center;max-width:260px;">
+      Enter the 4-letter room code shown on the laptop to pair your phone as the steering wheel.
+    </p>
+    <input id="room-input" class="join-input" type="text" maxlength="4" placeholder="ABCD" inputmode="text" autocomplete="off" autocapitalize="characters">
+    <button id="btn-join" class="join-btn">Pair Controller</button>
+    <div id="join-status" class="status-msg"></div>
+  </div>
+
+  <!-- Controller Screen -->
+  <div id="ctrl-screen" class="ctrl-screen">
+    <div class="top-bar">
+      <div>
+        <div class="room-label">Room</div>
+        <div class="room-code" id="room-code">----</div>
+      </div>
+      <button id="btn-disconnect" class="disconnect-btn">Disconnect</button>
+    </div>
+
+    <div class="gyro-hud">
+      <div class="gyro-value" id="gyro-value">0&deg;</div>
+      <div class="gyro-bar">
+        <div class="gyro-fill" id="gyro-fill"></div>
+      </div>
+      <div class="gyro-label">
+        <span>Left</span>
+        <span>Steering</span>
+        <span>Right</span>
+      </div>
+    </div>
+
+    <div class="signals">
+      <div id="sig-left" class="signal">&#x2190; Left Signal</div>
+      <div id="sig-right" class="signal">Right Signal &#x2192;</div>
+    </div>
+
+    <div class="pedals">
+      <div id="pedal-brake" class="pedal brake">
+        <div class="pedal-label">
+          <span style="font-size:36px;">&#x25A0;</span>
+          <span>Brake</span>
+        </div>
+      </div>
+      <div id="pedal-gas" class="pedal gas">
+        <div class="pedal-label">
+          <span style="font-size:36px;">&#9650;</span>
+          <span>Drive</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Permission overlay -->
+  <div id="perm-overlay" class="perm-overlay">
+    <h3>Enable Motion Sensors</h3>
+    <p>Tilt your phone left and right to steer.<br>We need permission to access your device orientation.</p>
+    <button id="btn-perm" class="perm-btn">Allow Motion</button>
+  </div>
+
+  <script>
+    /* ═══════ Config ═══════ */
+    const WS_URL = `ws://${location.host}`;
+
+    /* ═══════ DOM ═══════ */
+    const joinScreen = document.getElementById('join-screen');
+    const ctrlScreen = document.getElementById('ctrl-screen');
+    const roomInput = document.getElementById('room-input');
+    const joinStatus = document.getElementById('join-status');
+    const btnJoin = document.getElementById('btn-join');
+    const btnDisconnect = document.getElementById('btn-disconnect');
+    const roomCodeEl = document.getElementById('room-code');
+    const gyroValue = document.getElementById('gyro-value');
+    const gyroFill = document.getElementById('gyro-fill');
+    const pedalBrake = document.getElementById('pedal-brake');
+    const pedalGas = document.getElementById('pedal-gas');
+    const sigLeft = document.getElementById('sig-left');
+    const sigRight = document.getElementById('sig-right');
+    const permOverlay = document.getElementById('perm-overlay');
+    const btnPerm = document.getElementById('btn-perm');
+
+    /* ═══════ State ═══════ */
+    let ws = null;
+    let roomCode = '';
+    let steering = 0;   // -1..1
+    let brake = false;
+    let gas = false;
+    let signalLeft = false;
+    let signalRight = false;
+    let lastSent = 0;
+    let permGranted = false;
+
+    /* ═══════ WebSocket ═══════ */
+    function connect(code) {
+      if (ws) ws.close();
+      roomCode = code.toUpperCase().trim();
+      roomCodeEl.textContent = roomCode;
+      joinStatus.textContent = 'Connecting...';
+      joinStatus.className = 'status-msg';
+
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'controller_join', roomCode }));
+      };
+
+      ws.onmessage = (evt) => {
+        const data = JSON.parse(evt.data);
+        if (data.type === 'joined') {
+          joinScreen.classList.add('hidden');
+          ctrlScreen.classList.add('active');
+          requestMotionPermission();
+        } else if (data.type === 'error') {
+          joinStatus.textContent = data.message;
+          joinStatus.className = 'status-msg error';
+        }
+      };
+
+      ws.onclose = () => {
+        joinStatus.textContent = 'Disconnected. Tap Pair to reconnect.';
+        joinStatus.className = 'status-msg error';
+        ctrlScreen.classList.remove('active');
+        joinScreen.classList.remove('hidden');
+      };
+
+      ws.onerror = () => {
+        joinStatus.textContent = 'Connection error. Check the room code.';
+        joinStatus.className = 'status-msg error';
+      };
+    }
+
+    function disconnect() {
+      if (ws) ws.close();
+      ws = null;
+      ctrlScreen.classList.remove('active');
+      joinScreen.classList.remove('hidden');
+      roomInput.value = '';
+      joinStatus.textContent = '';
+    }
+
+    /* ═══════ Motion Permission ═══════ */
+    function requestMotionPermission() {
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        gyroValue.textContent = 'No gyro';
+        return;
+      }
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        permOverlay.classList.add('visible');
+      } else {
+        // Android / non-iOS: permission implicit
+        permGranted = true;
+        window.addEventListener('deviceorientation', onOrientation);
+      }
+    }
+
+    btnPerm.addEventListener('click', async () => {
+      try {
+        const result = await DeviceOrientationEvent.requestPermission();
+        permGranted = result === 'granted';
+        permOverlay.classList.remove('visible');
+        if (permGranted) {
+          window.addEventListener('deviceorientation', onOrientation);
+        } else {
+          gyroValue.textContent = 'Denied';
+        }
+      } catch (e) {
+        permOverlay.classList.remove('visible');
+        window.addEventListener('deviceorientation', onOrientation);
+      }
+    });
+
+    /* ═══════ Orientation Handling ═══════ */
+    function onOrientation(e) {
+      if (!permGranted) return;
+      // Use gamma (left/right tilt) for steering.
+      // gamma ranges roughly -90..90.
+      let raw = e.gamma || 0;
+      // Clamp and normalize to -1..1
+      if (raw > 45) raw = 45;
+      if (raw < -45) raw = -45;
+      steering = raw / 45;  // -1..1
+
+      updateGyroUI();
+      maybeSend();
+    }
+
+    function updateGyroUI() {
+      const deg = Math.round(steering * 45);
+      gyroValue.textContent = (deg > 0 ? '+' : '') + deg + '\u00B0';
+      const pct = Math.abs(steering) * 50;
+      gyroFill.style.width = pct + '%';
+      gyroFill.style.left = steering < 0 ? (50 - pct) + '%' : '50%';
+    }
+
+    /* ═══════ Input Throttle ═══════ */
+    function maybeSend() {
+      const now = Date.now();
+      if (now - lastSent < 50) return; // 20 Hz max
+      lastSent = now;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'controller_input',
+          steering,
+          brake,
+          gas,
+          signalLeft,
+          signalRight,
+        }));
+      }
+    }
+
+    /* ═══════ Touch Pedals ═══════ */
+    function bindPedal(el, setter) {
+      const down = () => { setter(true); el.classList.add('active'); maybeSend(); };
+      const up = () => { setter(false); el.classList.remove('active'); maybeSend(); };
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); down(); });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); up(); });
+      el.addEventListener('mousedown', down);
+      el.addEventListener('mouseup', up);
+      el.addEventListener('mouseleave', up);
+    }
+
+    bindPedal(pedalBrake, (v) => brake = v);
+    bindPedal(pedalGas, (v) => gas = v);
+
+    /* ═══════ Signals (tap to toggle) ═══════ */
+    sigLeft.addEventListener('touchstart', (e) => { e.preventDefault(); toggleSignal('left'); });
+    sigLeft.addEventListener('click', () => toggleSignal('left'));
+    sigRight.addEventListener('touchstart', (e) => { e.preventDefault(); toggleSignal('right'); });
+    sigRight.addEventListener('click', () => toggleSignal('right'));
+
+    function toggleSignal(side) {
+      if (side === 'left') {
+        signalLeft = !signalLeft;
+        signalRight = false;
+      } else {
+        signalRight = !signalRight;
+        signalLeft = false;
+      }
+      sigLeft.classList.toggle('active-left', signalLeft);
+      sigRight.classList.toggle('active-right', signalRight);
+      maybeSend();
+    }
+
+    /* ═══════ Events ═══════ */
+    btnJoin.addEventListener('click', () => {
+      const code = roomInput.value.trim();
+      if (code.length === 4) connect(code);
+      else joinStatus.textContent = 'Enter a 4-letter room code.';
+    });
+
+    roomInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') btnJoin.click();
+    });
+
+    btnDisconnect.addEventListener('click', disconnect);
+
+    // Prevent zoom / double-tap
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('dblclick', (e) => e.preventDefault());
+  </script>
+</body>
+</html>

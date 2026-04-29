@@ -99,9 +99,9 @@
         font-weight: 800;
         letter-spacing: -0.02em;
         background: var(--gradient);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        background-clip: text;
       }
       .input-subtitle {
         color: var(--text2);
@@ -695,6 +695,7 @@
         font-weight: 900;
         margin: 0 0 8px 0;
         background: linear-gradient(135deg, var(--accent), var(--accent2));
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
       }
@@ -808,6 +809,47 @@
         transition: all 0.2s;
       }
       .btn-secondary:hover { background: var(--surface3); }
+
+      /* ═══════════ PHONE PAIR UI ═══════════ */
+      .phone-pair-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+      }
+      .phone-pair-btn {
+        padding: 6px 12px;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        border: none;
+        border-radius: 8px;
+        color: #0a0e17;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s;
+      }
+      .phone-pair-btn:hover { transform: scale(1.05); }
+      .phone-pair-btn:active { transform: scale(0.95); }
+      .phone-badge {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text3);
+        white-space: nowrap;
+      }
+      .phone-badge.waiting { color: var(--warning); }
+      .phone-badge.connected { color: var(--accent); }
+      .phone-badge.disconnected { color: var(--danger); }
+      .phone-badge.error { color: var(--danger); }
+      .phone-code {
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: 0.1em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
 
       /* ═══════════ MINI-MAP (PiP) ═══════════ */
       #cesium-minimap {
@@ -1027,6 +1069,11 @@
           <button class="mode-btn active" data-mode="overview" id="mode-overview">🗺 Overview</button>
           <button class="mode-btn" data-mode="drive" id="mode-drive">🚗 Drive</button>
           <button class="mode-btn" data-mode="pip" id="mode-pip">🔲 Drive+Map</button>
+        </div>
+        <div class="phone-pair-box">
+          <button id="btn-pair-phone" class="phone-pair-btn" title="Pair phone controller">📱 Pair</button>
+          <span class="phone-badge" id="phone-status-badge">Not paired</span>
+          <span class="phone-code" id="phone-room-code">----</span>
         </div>
         <div class="practice-progress">
           <div id="practice-progress-fill"></div>

@@ -571,6 +571,22 @@ export function getProgress() {
   return routeProgress;
 }
 
+export function setHeadingOffset(val) {
+  headingOffset = val;
+}
+
+export function setBrake(active) {
+  const key = "s";
+  if (active) keysDown.add(key);
+  else keysDown.delete(key);
+}
+
+export function setGas(active) {
+  const key = "w";
+  if (active) keysDown.add(key);
+  else keysDown.delete(key);
+}
+
 export function destroy() {
   stopLoop();
   window.removeEventListener("keydown", onKeyDown);

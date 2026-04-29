@@ -2,6 +2,8 @@ import { scanRoute } from "./hazard-scanner.js";
 import * as cesiumView from "./cesium-view.js";
 import * as narration from "./narration.js";
 import * as distractions from "./distractions.js";
+import * as accidentScanner from "./accident-scanner.js";
+import * as phoneBridge from "./phone-bridge.js";
 
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
@@ -44,6 +46,17 @@ const state = {
 /* ═══════════════════ HELPERS ═══════════════════ */
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function formatDuration(sec) {
   if (sec < 60) return `${sec}s`;
@@ -186,11 +199,31 @@ async function startScan() {
     await sleep(300);
 
     // Step 4: Geometry scan
-    updateScanStep(statusEl, progressEl, "Scanning for sharp turns and hazards...", 60);
+    updateScanStep(statusEl, progressEl, "Scanning for sharp turns and hazards...", 55);
     const result = scanRoute(state.routeCoords, state.routeSteps);
     state.hazards = result.hazards;
     state.hazardSummary = result.summary;
-    await sleep(400);
+    await sleep(300);
+
+    // Step 4b: Real-world hazard data from OSM / Overpass
+    updateScanStep(statusEl, progressEl, "Checking real-world traffic hazards...", 65);
+    try {
+      const accidentHazards = await accidentScanner.scanAccidents(state.routeCoords);
+      if (accidentHazards.length) {
+        // Merge, avoiding duplicates close to existing hazards
+        const deduped = accidentHazards.filter((ah) => {
+          const tooClose = state.hazards.some(
+            (h) => haversineDistance(h.lat, h.lng, ah.lat, ah.lng) < 40
+          );
+          return !tooClose;
+        });
+        state.hazards.push(...deduped);
+        state.hazardSummary.total = state.hazards.length;
+      }
+    } catch (e) {
+      console.warn("Accident scan failed (non-critical):", e.message);
+    }
+    await sleep(300);
 
     // Step 5: AI analysis
     updateScanStep(statusEl, progressEl, "AI analyzing route confusion points...", 80);
@@ -701,6 +734,68 @@ function renderExamples() {
   });
 }
 
+/* ═══════════════════ PHONE CONTROLLER ═══════════════════ */
+function initPhoneBridge() {
+  phoneBridge.onStatus((status, data) => {
+    const badge = $("phone-status-badge");
+    const codeEl = $("phone-room-code");
+    if (!badge) return;
+    switch (status) {
+      case "room_created":
+        badge.textContent = "Waiting for phone...";
+        badge.className = "phone-badge waiting";
+        if (codeEl) codeEl.textContent = data;
+        break;
+      case "controller_connected":
+        badge.textContent = "Phone connected";
+        badge.className = "phone-badge connected";
+        showToast("Phone controller paired!");
+        break;
+      case "controller_disconnected":
+        badge.textContent = "Phone disconnected";
+        badge.className = "phone-badge disconnected";
+        break;
+      case "error":
+        badge.textContent = data || "Pairing failed";
+        badge.className = "phone-badge error";
+        break;
+      case "disconnected":
+        badge.textContent = "Not paired";
+        badge.className = "phone-badge";
+        if (codeEl) codeEl.textContent = "----";
+        break;
+    }
+  });
+
+  phoneBridge.onInput((input) => {
+    // Map phone steering (-1..1) to heading offset degrees
+    if (typeof input.steering === "number" && cesiumInitialized) {
+      const maxSteer = 45; // degrees
+      cesiumView.setHeadingOffset(input.steering * maxSteer);
+    }
+    if (input.brake) {
+      if (autoDriving) stopAutoDrive();
+      cesiumView.setBrake(true);
+    } else {
+      cesiumView.setBrake(false);
+    }
+    if (input.gas && !autoDriving) {
+      startAutoDrive();
+    }
+  });
+}
+
+function togglePairPhone() {
+  if (phoneBridge.getRoomCode()) {
+    phoneBridge.closeRoom();
+    $("phone-status-badge").textContent = "Not paired";
+    $("phone-status-badge").className = "phone-badge";
+    $("phone-room-code").textContent = "----";
+  } else {
+    phoneBridge.startHostRoom();
+  }
+}
+
 /* ═══════════════════ EVENT WIRING ═══════════════════ */
 function wireEvents() {
   $("btn-scan").addEventListener("click", startScan);
@@ -742,6 +837,10 @@ function wireEvents() {
   $("btn-difficulty").addEventListener("click", cycleDifficulty);
   $("btn-finish").addEventListener("click", finishRehearsal);
 
+  // Phone controller
+  const btnPair = $("btn-pair-phone");
+  if (btnPair) btnPair.addEventListener("click", togglePairPhone);
+
   // Recap buttons
   $("btn-retry").addEventListener("click", () => {
     resetRehearsal();
@@ -775,6 +874,7 @@ function init() {
   showScreen("input");
   renderExamples();
   wireEvents();
+  initPhoneBridge();
   $("input-origin").focus();
 }
 
