@@ -227,7 +227,6 @@
     .signal.active-left { border-color: var(--warning); color: var(--warning); background: rgba(255,170,0,0.12); }
     .signal.active-right { border-color: var(--accent2); color: var(--accent2); background: rgba(0,136,255,0.12); }
 
-    /* ─── Permissions Overlay ─── */
     .perm-overlay {
       position: fixed;
       inset: 0;
@@ -254,6 +253,31 @@
       font-size: 16px;
       font-weight: 800;
       cursor: pointer;
+    }
+
+    /* ─── Rotate Overlay ─── */
+    .rotate-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 2000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 16px;
+    }
+    .rotate-overlay h2 { font-size: 24px; color: var(--accent); }
+    .rotate-icon { font-size: 48px; display: inline-block; animation: rotateAnim 2s infinite ease-in-out; }
+    @keyframes rotateAnim {
+      0% { transform: rotate(0deg); }
+      50% { transform: rotate(-90deg); }
+      100% { transform: rotate(-90deg); }
+    }
+    @media (orientation: portrait) {
+      .rotate-overlay { display: flex; }
     }
   </style>
 </head>
@@ -318,6 +342,13 @@
     <h3>Enable Motion Sensors</h3>
     <p>Tilt your phone left and right to steer.<br>We need permission to access your device orientation.</p>
     <button id="btn-perm" class="perm-btn">Allow Motion</button>
+  </div>
+
+  <!-- Rotate overlay -->
+  <div id="rotate-overlay" class="rotate-overlay">
+    <div class="rotate-icon">📱</div>
+    <h2>Rotate your device</h2>
+    <p>The steering controller works best in landscape mode.</p>
   </div>
 
   <script>

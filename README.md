@@ -1,130 +1,132 @@
-# ConHacks Submission
+# RRR — Road Route Rehearsal
 
-Working repository for the ConHacks project.
+**Practice any driving route from home before you brave it for real.**
 
-## Current Pick
+RRR is a driver-confusion detection and rehearsal tool. It scans a route for pain points — ambiguous exits, lane splits, rapid merges, hidden entrances, confusing signage — then lets the driver practice those moments in a 3D/StreetView environment with a phone-as-steering-wheel controller, narrated by a driving-instructor voice.
 
-**Route Rehearsal**: a driver-confusion detection and rehearsal tool. It identifies route pain points such as ambiguous exits, lane splits, missed merges, hidden entrances, and signage mismatches, then lets the driver practice those moments before driving again.
+---
 
-The demo should focus on one concrete failure mode: the user takes the wrong branch at a confusing exit, the app records or predicts that pain point, and then the user rehearses that specific decision in a focused practice mode.
+## Tech Stack
 
-## Proposal
+### Frontend
+| Layer | Technology | Role |
+|---|---|---|
+| **Markup & Layout** | Vanilla HTML5 / CSS3 | Single-page app with four screens (input → scan → report → practice → recap) |
+| **JavaScript** | ES Modules (no bundler) | All client logic in native `<script type="module">` — zero build step |
+| **3D Engine** | [CesiumJS 1.119](https://cesium.com) | Satellite globe renderer with route polyline, hazard markers, driver-POV camera |
+| **2D Maps** | [Leaflet 1.9.4](https://leafletjs.com) | Report map, HUD minimap, 2D fallback view |
+| **Map Tiles** | CARTO Dark + ArcGIS World Imagery | Dark-themed overview tiles + satellite imagery for practice mode |
+| **Typography** | [Inter (Google Fonts)](https://fonts.google.com/specimen/Inter) | UI typeface |
 
-The canonical proposal and execution plan live in [docs/PROPOSAL.md](/home/conhacks-user/conhacks-submission/docs/PROPOSAL.md). It expands the concept into:
+### Backend / Server
+| Component | Technology | Role |
+|---|---|---|
+| **App Server** | Node.js + built-in `http` module | Serves static files and injects runtime `/config.js` with API keys |
+| **WebSocket Relay** | [`ws` 8.x](https://github.com/websockets/ws) (only npm dependency) | Real-time phone ↔ laptop pairing via 4-letter room codes |
+| **Public Tunneling** | [ngrok](https://ngrok.com) | HTTPS tunnel for phone controller over the internet (`--scheme=https`) |
 
-- product framing and target users
-- MVP and non-goals
-- system architecture
-- map and 3D strategy
-- agile sprint plan
-- backlog and acceptance criteria
-- risks, mitigations, and demo narrative
+### APIs & Data Services
+| API | Module | Purpose |
+|---|---|---|
+| **OSRM** (Project OSRM public) | `app.js` | Turn-by-turn routing + geometry coordinates |
+| **Nominatim** (OSM) | `app.js` | Forward geocoding for origin/destination |
+| **Overpass API** (OSM) | `accident-scanner.js` | Real-world hazard data — traffic signals, stop signs, crossings, railway crossings, tunnels, poor surfaces, speed zones, traffic calming |
+| **Google Gemini 2.0 Flash** | `app.js` | AI route analysis — lane positioning, confusing signage, hidden turns, merge timing, road layout surprises |
+| **ElevenLabs TTS** (Flash v2.5) | `narration.js`, `distractions.js` | Instructor voice narration + multi-character distraction simulation (4 voice personas) |
+| **Google Maps Embed** | `app.js` | Optional StreetView overlay for real-world reference |
+| **Cesium ion** | `cesium-view.js` | Token auth for Cesium globe (falls back to ArcGIS satellite if unavailable) |
 
-## Working Assets
+### Hazard Detection Pipeline
+| Scanner | Source | What it detects |
+|---|---|---|
+| `hazard-scanner.js` | Route geometry + OSRM steps | Sharp turns, U-turns, merges, forks, ramps, roundabouts, lane positioning, confusing signage, decision clusters |
+| `accident-scanner.js` | Overpass API (OSM) | Traffic signals, stop signs, yield signs, unmarked crossings, traffic calming, railway crossings, tunnels, poor surfaces, speed zones, OSM-tagged hazards |
+| Gemini AI | `app.js` → Gemini 2.0 Flash | Lane positioning advice, confusing signage zones, hidden/tricky turns, merge/exit timing, road layout surprises |
 
-The repo now includes concrete MVP data assets and canonical docs:
+### Phone Controller
+| Feature | Implementation |
+|---|---|
+| **Steering** | Device orientation API (`gamma` axis → left/right tilt) |
+| **Brake / Gas** | Touch pedals with press-and-hold |
+| **Turn Signals** | Tap-to-toggle L/R buttons |
+| **Pairing** | WebSocket room code (4 chars) with auto-reconnect |
+| **iOS Support** | `DeviceOrientationEvent.requestPermission()` flow |
 
-- [docs/SCHEMA.md](/home/conhacks-user/conhacks-submission/docs/SCHEMA.md): internal route, pain-point, and rehearsal-run schema
-- [docs/HANDOFF.md](/home/conhacks-user/conhacks-submission/docs/HANDOFF.md): browser demo handoff and run instructions
-- [docs/IDEA_DECISION.md](/home/conhacks-user/conhacks-submission/docs/IDEA_DECISION.md): shortlist and sponsor decision
-- [data/demo-routes/downtown-garage.json](/home/conhacks-user/conhacks-submission/data/demo-routes/downtown-garage.json): wrong-exit and hidden-garage demo route
-- [data/demo-routes/airport-merge.json](/home/conhacks-user/conhacks-submission/data/demo-routes/airport-merge.json): merge-heavy airport demo route
-- [data/rehearsal-run.example.json](/home/conhacks-user/conhacks-submission/data/rehearsal-run.example.json): example rehearsal result payload
+### Developer Tooling
+| Tool | Usage |
+|---|---|
+| `npm run startup` | Interactive menu — local mode, ngrok public mode, status, cleanup |
+| `npm run smoke` | Validates config.js injection, ws/wss protocol logic, and key file integrity |
+| `scripts/connect-ccsecure.sh` | WPA2-Enterprise Wi-Fi config for hackathon venue (NetworkManager/PEAP) |
 
-## Why This One
+### AI Tools Used During Development
+Codex (GPT 5.5 / 5.4 / 5.4 Mini / 5.3-Codex), Gemini CLI (3.1 Pro / 3 Flash), Google Antigravity (Sonnet 4.5 / Opus 4.6 / Gemini 3 Flash), Cursor (Auto), Windsurf (Kimi K 2.6 / SWE 1.6), Google AI Studio (Gemini 3.1 Pro), Google AI Overviews, NotebookLM
 
-- It is useful without needing to be a pure game or a pure AI wrapper.
-- Gemini can be used naturally for route summarization, pain-point detection, landmark extraction, and hazard-style narration.
-- ElevenLabs can add a strong polish layer with a driving-instructor voice.
-- DigitalOcean can host the live app and phone/laptop session sync.
-- Snowflake can support route pain-point analytics: where drivers miss exits, get rerouted, hesitate, or report confusing signage.
-- Solana is optional and should not be forced unless the team wants a stretch feature.
-
-## MVP
-
-1. Enter an origin and destination.
-2. Generate route pain points: ambiguous exits, lane guidance, landmarks, hidden entrances, and confusing intersections.
-3. Let the user manually tag a confusion point or load a canned real-world example.
-4. Open a phone controller that pairs to the laptop session.
-5. Rehearse the full route or only the confusing segment with gyro or touch steering.
-6. Narrate upcoming route events in an instructor voice.
-7. Show a post-drive recap of missed turns, hesitation points, route confidence, and pain-point outcomes.
-
-## Map and 3D Strategy
-
-Use an OpenStreetMap-based stack for the core product so we can control route overlays, pain-point scoring, and analytics. The likely stack is MapLibre for rendering, OSRM or GraphHopper for routing, and hosted OSM-derived tiles/geocoding rather than public OSM infrastructure.
-
-Rich 3D practice is important for demo impact, but open data will not match Google-quality global 3D coverage. Treat 3D as a separate practice layer:
-
-1. MVP: stylized 2.5D map with route overlays, lane prompts, and scene cards.
-2. Strong demo path: custom 3D scenes for one or two confusing intersections.
-3. Optional Google-backed mode: isolated rich 3D practice if Google APIs are needed for realism.
-
-Do not mix Google route/map content into an OSM-rendered core map.
+---
 
 ## Running the App
 
 ```bash
 npm install
-# Optional API keys (leave blank for fallback behavior)
+
+# API keys — set via environment or .env (leave blank for graceful fallback)
 export GEMINI_API_KEY="..."
 export GOOGLE_MAPS_KEY="..."
 export ELEVENLABS_API_KEY="..."
+
 npm run startup
 ```
 
-This opens a numbered startup menu so you can choose local mode, public ngrok mode, status, or stop stuck processes on port `8080`.
+This opens an interactive startup menu:
+1. **Local mode** — laptop + phone on same Wi-Fi
+2. **Public mode** — ngrok HTTPS tunnel for internet pairing
+3. **Status** — check if server is running
+4. **Stop** — aggressively kill processes on port 8080
 
 Then:
-- **Laptop**: open `http://localhost:8080/` in a browser window (must support WebGL for full functionality.)
+- **Laptop**: open `http://localhost:8080/`
 - **Phone**: open `http://<laptop-ip>:8080/controller.html`
-- In the practice screen, click **📱 Pair** to get a 4-letter room code, enter it on the phone.
-- For quick local verification, run `npm run smoke`.
+- Click **📱 Pair** → enter 4-letter code on phone
+- For quick verification: `npm run smoke`
 
-The Node.js server (`server.js`) replaces the old `python3 -m http.server` because the phone controller requires a WebSocket relay.
+When using ngrok, the app auto-detects the HTTPS host and switches to `wss://` for secure WebSocket. A pairing popup shows laptop URL, phone URL, and QR code.
 
-You can still run direct commands if preferred:
+---
 
-```bash
-npm start
-npm run start:public
-```
+## Proposal & Docs
 
-This command:
-- starts the app server if port `8080` is free
-- reuses an already-running app server if port `8080` is already in use
-- launches ngrok and prints the public `https://...` URL
-- auto-opens the laptop URL in Firefox when available (fallback: `xdg-open`)
+| Document | Contents |
+|---|---|
+| [PROPOSAL.md](docs/PROPOSAL.md) | Product framing, target users, MVP scope, system architecture, agile sprints, risks, demo narrative |
+| [SCHEMA.md](docs/SCHEMA.md) | Route, segment, pain point, scene card, and rehearsal run data models |
+| [HANDOFF.md](HANDOFF.md) | Technical handoff — built features, next steps, key files, environment details |
 
-Open the ngrok `https://...` URL on laptop and phone. The app auto-uses secure WebSockets (`wss://`) over HTTPS.
-When opened through ngrok, the app now shows a pairing popup with:
-- laptop URL
-- phone controller URL
-- QR code for the phone controller page
+### Demo Data
+- `data/demo-routes/downtown-garage.json` — wrong-exit and hidden-garage route
+- `data/demo-routes/airport-merge.json` — merge-heavy airport route
+- `data/rehearsal-run.example.json` — example rehearsal result payload
 
-If you see `EADDRINUSE` after pressing `Ctrl+Z`, resume/stop the old job first:
+---
 
-```bash
-jobs
-fg %1
-# then Ctrl+C to stop cleanly
-```
+## MVP Features
 
-## Agile Delivery Plan
+1. Enter origin + destination (or load a demo route)
+2. Multi-layer hazard scan: geometry → OSM real-world → Gemini AI
+3. Interactive report map with color-coded hazard markers + provenance badges (GEO / OSM / AI)
+4. 3D practice view (CesiumJS satellite globe) with driver-POV camera
+5. Phone-as-steering-wheel via WebSocket pairing
+6. Auto-drive with brake/gas/signal controls
+7. ElevenLabs instructor narration with native speech fallback
+8. Distraction simulation (3 difficulty tiers: calm / moderate / intense)
+9. Hotspots-only mode for long routes
+10. Post-drive recap with confidence score, hazard-by-hazard results, and stats
 
-We will use a short-cycle agile approach built around working demo slices instead of isolated technical tasks.
+---
 
-1. Sprint 0: lock scope, define route and pain-point schemas, and get phone/laptop pairing working with mocked route data.
-2. Sprint 1: build the core pain-point rehearsal loop with prompts, playback, steering input, and recap logging.
-3. Sprint 2: add Gemini route enrichment, Snowflake-ready analytics events, and ElevenLabs narration where they improve the demo.
-4. Sprint 3: harden the judge path with canned routes, reconnect handling, and fallback modes.
-
-The main rule is that the app must stay demoable after every sprint. Live APIs are enhancements, not dependencies.
-
-## Stretch
-- NHTSA / municipal crash-data overlay for live danger-zone scoring. - top priority
-- Custom or Google-backed 3D practice scenes for key intersections.
-- "Chaos commute" party mode with fictional route events for demo energy.
-- Snowflake-backed aggregate analytics: most confusing exits, reroutes, retries, hesitation points, and completion confidence.
-- Solana-based proof-of-practice badge, only if it can be added cleanly.
+## Stretch Goals
+- NHTSA / municipal crash-data overlay for live danger-zone scoring *(top priority)*
+- VR integration + physical steering wheel / brake peripherals
+- Higher-order weather-aware hazard evaluation
+- Snowflake-backed aggregate analytics
+- Solana proof-of-practice badge (only if clean)
 
