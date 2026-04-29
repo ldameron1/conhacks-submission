@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "startup": "bash startup.sh",
+    "start:public": "bash scripts/start-public.sh",
+    "smoke": "node scripts/smoke-test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

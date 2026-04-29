@@ -15,6 +15,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const WebSocket = require("ws");
 
 const PORT = process.env.PORT || 8080;
@@ -34,9 +35,28 @@ const mimeTypes = {
 /* ─────────────── HTTP Static Server ─────────────── */
 
 const server = http.createServer((req, res) => {
-  let filePath = req.url.split("?")[0];
-  if (filePath === "/") filePath = "/index.html";
-  filePath = path.join(__dirname, filePath);
+  const requestPath = req.url.split("?")[0];
+
+  if (requestPath === "/config.js") {
+    const publicConfig = {
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
+      GOOGLE_MAPS_KEY: process.env.GOOGLE_MAPS_KEY || "",
+      ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || "",
+    };
+    const js = `window.__ROUTE_REHEARSAL_CONFIG__ = ${JSON.stringify(publicConfig)};`;
+    res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+    res.end(js);
+    return;
+  }
+
+  let relativePath = requestPath === "/" ? "/index.html" : requestPath;
+  const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, "");
+  const filePath = path.join(__dirname, safePath);
+  if (!filePath.startsWith(__dirname)) {
+    res.writeHead(403, { "Content-Type": "text/plain" });
+    res.end("403 Forbidden");
+    return;
+  }
 
   const ext = path.extname(filePath).toLowerCase();
   const contentType = mimeTypes[ext] || "application/octet-stream";
@@ -68,6 +88,19 @@ const wss = new WebSocket.Server({ server });
 
 // roomCode -> { host: WebSocket, controller: WebSocket|null, createdAt: number }
 const rooms = new Map();
+
+function getLanUrls(port) {
+  const interfaces = os.networkInterfaces();
+  const urls = [];
+  for (const entries of Object.values(interfaces)) {
+    if (!entries) continue;
+    for (const iface of entries) {
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      urls.push(`http://${iface.address}:${port}`);
+    }
+  }
+  return [...new Set(urls)];
+}
 
 function generateRoomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -177,7 +210,20 @@ setInterval(() => {
 }, 60 * 1000);
 
 server.listen(PORT, () => {
-  console.log(`Route Rehearsal server running on http://localhost:${PORT}`);
+  const localhostUrl = `http://localhost:${PORT}`;
+  console.log(`Route Rehearsal server running on ${localhostUrl}`);
   console.log(`WebSocket ready on ws://localhost:${PORT}`);
-  console.log(`Phone controller page: http://localhost:${PORT}/controller.html`);
+  console.log(`Phone controller page (same device): ${localhostUrl}/controller.html`);
+
+  const lanUrls = getLanUrls(PORT);
+  if (lanUrls.length) {
+    console.log("Phone controller page (same Wi-Fi):");
+    for (const url of lanUrls) {
+      console.log(`  - ${url}/controller.html`);
+    }
+  } else {
+    console.log("No LAN IPv4 address detected. Use ngrok for remote phone pairing.");
+  }
+
+  console.log("For internet pairing, run: ngrok http 8080");
 });

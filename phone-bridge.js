@@ -6,7 +6,8 @@
  * Inputs are relayed to the laptop and forwarded into cesium-view steering.
  */
 
-const WS_URL = `ws://${location.host}`;
+const WS_PROTOCOL = location.protocol === "https:" ? "wss" : "ws";
+const WS_URL = `${WS_PROTOCOL}://${location.host}`;
 
 let ws = null;
 let roomCode = null;

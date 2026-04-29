@@ -66,15 +66,49 @@ Do not mix Google route/map content into an OSM-rendered core map.
 
 ```bash
 npm install
-npm start
+# Optional API keys (leave blank for fallback behavior)
+export GEMINI_API_KEY="..."
+export GOOGLE_MAPS_KEY="..."
+export ELEVENLABS_API_KEY="..."
+npm run startup
 ```
 
+This opens a numbered startup menu so you can choose local mode, public ngrok mode, status, or stop stuck processes on port `8080`.
+
 Then:
-- **Laptop**: open `http://localhost:8080/`
+- **Laptop**: open `http://localhost:8080/` in a browser window (must support WebGL for full functionality.)
 - **Phone**: open `http://<laptop-ip>:8080/controller.html`
 - In the practice screen, click **📱 Pair** to get a 4-letter room code, enter it on the phone.
+- For quick local verification, run `npm run smoke`.
 
 The Node.js server (`server.js`) replaces the old `python3 -m http.server` because the phone controller requires a WebSocket relay.
+
+You can still run direct commands if preferred:
+
+```bash
+npm start
+npm run start:public
+```
+
+This command:
+- starts the app server if port `8080` is free
+- reuses an already-running app server if port `8080` is already in use
+- launches ngrok and prints the public `https://...` URL
+- auto-opens the laptop URL in Firefox when available (fallback: `xdg-open`)
+
+Open the ngrok `https://...` URL on laptop and phone. The app auto-uses secure WebSockets (`wss://`) over HTTPS.
+When opened through ngrok, the app now shows a pairing popup with:
+- laptop URL
+- phone controller URL
+- QR code for the phone controller page
+
+If you see `EADDRINUSE` after pressing `Ctrl+Z`, resume/stop the old job first:
+
+```bash
+jobs
+fg %1
+# then Ctrl+C to stop cleanly
+```
 
 ## Agile Delivery Plan
 
@@ -88,9 +122,9 @@ We will use a short-cycle agile approach built around working demo slices instea
 The main rule is that the app must stay demoable after every sprint. Live APIs are enhancements, not dependencies.
 
 ## Stretch
-
+- NHTSA / municipal crash-data overlay for live danger-zone scoring. - top priority
 - Custom or Google-backed 3D practice scenes for key intersections.
 - "Chaos commute" party mode with fictional route events for demo energy.
 - Snowflake-backed aggregate analytics: most confusing exits, reroutes, retries, hesitation points, and completion confidence.
 - Solana-based proof-of-practice badge, only if it can be added cleanly.
-- NHTSA / municipal crash-data overlay for live danger-zone scoring.
+

@@ -704,6 +704,16 @@
         color: var(--text);
       }
       .hud-pill .val { color: var(--accent); font-size: 16px; }
+      .hud-pill.signal-active-left {
+        border-color: rgba(255,170,0,0.8);
+        color: var(--warning);
+        box-shadow: 0 0 16px rgba(255,170,0,0.35);
+      }
+      .hud-pill.signal-active-right {
+        border-color: rgba(0,136,255,0.8);
+        color: var(--accent2);
+        box-shadow: 0 0 16px rgba(0,136,255,0.35);
+      }
       .hud-alert {
         position: absolute;
         top: 70px;
@@ -1072,6 +1082,82 @@
       }
       #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+      /* ═══════════ NGROK PAIR MODAL ═══════════ */
+      .ngrok-modal.hidden { display: none; }
+      .ngrok-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .ngrok-modal-card {
+        width: min(560px, 100%);
+        background: var(--bg2);
+        border: 1px solid var(--border2);
+        border-radius: var(--radius);
+        padding: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+      }
+      .ngrok-modal-title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 8px;
+      }
+      .ngrok-modal-text {
+        color: var(--text2);
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .ngrok-links {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .ngrok-link-box {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+      }
+      .ngrok-link-box code {
+        flex: 1;
+        overflow-wrap: anywhere;
+        font-size: 12px;
+        color: var(--text);
+      }
+      .ngrok-copy-btn {
+        border: 1px solid var(--border2);
+        background: var(--surface3);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 4px 8px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .ngrok-qr-wrap {
+        display: flex;
+        justify-content: center;
+        margin: 12px 0;
+      }
+      .ngrok-qr {
+        width: 180px;
+        height: 180px;
+        background: #fff;
+        border-radius: 8px;
+      }
+      .ngrok-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
       /* ═══════════ LEAFLET OVERRIDES ═══════════ */
       .leaflet-control-attribution { font-size: 10px !important; opacity: 0.5; }
       .leaflet-popup-content-wrapper { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
@@ -1213,6 +1299,7 @@
       <div class="practice-body">
         <div class="practice-view-panel">
           <div id="cesium-container"></div>
+
           <!-- Drive HUD overlay -->
           <div id="drive-hud" class="drive-hud hidden">
             <div class="hud-top">
@@ -1222,6 +1309,8 @@
               <button id="btn-streetview-toggle" class="btn-streetview-toggle" title="Toggle StreetView Overlay">🏙 StreetView</button>
               <button id="btn-mute" class="hud-btn" title="Toggle narration">🔊</button>
               <button id="btn-difficulty" class="hud-btn" title="Cycle difficulty">🟢 Calm</button>
+              <div class="hud-pill" id="hud-signal-left">⬅ Signal</div>
+              <div class="hud-pill" id="hud-signal-right">Signal ➡</div>
             </div>
             
             <!-- MiniMap -->
@@ -1275,6 +1364,32 @@
     <!-- Toast -->
     <div id="toast"></div>
 
+    <!-- ngrok helper modal -->
+    <div id="ngrok-modal" class="ngrok-modal hidden">
+      <div class="ngrok-modal-card">
+        <div class="ngrok-modal-title">Public Pairing Info</div>
+        <p class="ngrok-modal-text">
+          You are running via ngrok. Open the laptop URL on this browser, and the phone controller URL on your phone.
+        </p>
+        <div class="ngrok-links">
+          <div class="ngrok-link-box">
+            <code id="ngrok-laptop-url"></code>
+            <button id="btn-copy-laptop-url" class="ngrok-copy-btn">Copy</button>
+          </div>
+          <div class="ngrok-link-box">
+            <code id="ngrok-phone-url"></code>
+            <button id="btn-copy-phone-url" class="ngrok-copy-btn">Copy</button>
+          </div>
+        </div>
+        <div class="ngrok-qr-wrap">
+          <img id="ngrok-phone-qr" class="ngrok-qr" alt="QR code for phone controller URL" />
+        </div>
+        <div class="ngrok-modal-actions">
+          <button id="btn-close-ngrok-modal" class="btn-secondary">Got it</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════ RECAP SCREEN ═══════════ -->
     <div id="screen-recap" class="screen">
       <div class="recap-container">
@@ -1314,6 +1429,7 @@
       </div>
     </div>
 
+    <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

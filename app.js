@@ -6,11 +6,11 @@ import * as accidentScanner from "./accident-scanner.js";
 import * as phoneBridge from "./phone-bridge.js";
 
 /* ═══════════════════ CONFIG ═══════════════════ */
+const RUNTIME_CONFIG = window.__ROUTE_REHEARSAL_CONFIG__ || {};
 const CONFIG = {
-  GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
-  GOOGLE_MAPS_KEY: "AIzaSyAx1p_zCdc8XkCDFK5-ZWmN-4I0NiTDMM4",
-  CESIUM_ION_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxY2RkMzlmZi1lMGI4LTRmNzUtOGU2MS01ZDMxZWM2ODYwOGIiLCJpZCI6NDI1MzE3LCJpYXQiOjE3Nzc0NjM1MjR9.W0oxtmgNcJJMRxnsOA0KzkW4ed3eTXvM4GE4ZCffcQo", // Free Cesium ion → Google Photorealistic 3D Tiles
-  ELEVENLABS_API_KEY: "e13d3e5124b3f8f46d11a20d62c4c1cc339d8b7c404d3c01d3afb9fbedea8b9a",
+  GEMINI_API_KEY: RUNTIME_CONFIG.GEMINI_API_KEY || "",
+  GOOGLE_MAPS_KEY: RUNTIME_CONFIG.GOOGLE_MAPS_KEY || "",
+  ELEVENLABS_API_KEY: RUNTIME_CONFIG.ELEVENLABS_API_KEY || "",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
   NOMINATIM_URL: "https://nominatim.openstreetmap.org/search",
   DARK_TILES: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -41,6 +41,10 @@ const state = {
     hazardEntryTime: [],  // timestamp when entered hazard zone
     hazardPauseTime: [],  // ms spent near each hazard
     routeCompletion: 0,
+  },
+  controllerSignals: {
+    left: false,
+    right: false,
   },
 };
 
@@ -618,10 +622,51 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove("visible"), 3000);
 }
 
+function isNgrokHost() {
+  const host = window.location.hostname || "";
+  return host.includes("ngrok");
+}
+
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("Copied to clipboard");
+  } catch {
+    showToast("Could not copy. Please copy manually.");
+  }
+}
+
+function initNgrokModal() {
+  const modal = $("ngrok-modal");
+  if (!modal || !isNgrokHost()) return;
+
+  const laptopUrl = `${window.location.origin}/`;
+  const phoneUrl = `${window.location.origin}/controller.html`;
+
+  $("ngrok-laptop-url").textContent = laptopUrl;
+  $("ngrok-phone-url").textContent = phoneUrl;
+  $("btn-copy-laptop-url").addEventListener("click", () => copyText(laptopUrl));
+  $("btn-copy-phone-url").addEventListener("click", () => copyText(phoneUrl));
+  $("btn-close-ngrok-modal").addEventListener("click", () => modal.classList.add("hidden"));
+
+  const qr = $("ngrok-phone-qr");
+  if (qr) {
+    qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(phoneUrl)}`;
+  }
+
+  modal.classList.remove("hidden");
+}
+
 /* ═══════════════════ AUTO-DRIVE ═══════════════════ */
 let autoDriving = false;
 let autoDriveInterval = null;
-const AUTO_DRIVE_SPEED = 0.08; // route index units per frame (~30-50 km/h feel)
+const AUTO_DRIVE_SPEED_MIN = 0.03;
+const AUTO_DRIVE_SPEED_MAX = 0.16;
+const AUTO_DRIVE_ACCEL = 0.003;
+const AUTO_DRIVE_BRAKE_DECAY = 0.005;
+let autoDriveSpeed = AUTO_DRIVE_SPEED_MIN;
+let gasHeld = false;
+let brakeHeld = false;
 
 function toggleAutoDrive() {
   if (autoDriving) {
@@ -646,6 +691,15 @@ function startAutoDrive() {
   // Auto-advance is handled by cesium-view's animation loop via keyboard simulation
   // We'll use setInterval to feed progress updates
   autoDriveInterval = setInterval(() => {
+    if (gasHeld) {
+      autoDriveSpeed = Math.min(AUTO_DRIVE_SPEED_MAX, autoDriveSpeed + AUTO_DRIVE_ACCEL);
+    } else {
+      autoDriveSpeed = Math.max(AUTO_DRIVE_SPEED_MIN, autoDriveSpeed - AUTO_DRIVE_ACCEL * 0.5);
+    }
+    if (brakeHeld) {
+      autoDriveSpeed = Math.max(0, autoDriveSpeed - AUTO_DRIVE_BRAKE_DECAY);
+    }
+
     const maxProgress = state.routeCoords.length - 1;
 
     if (cesiumInitialized) {
@@ -657,7 +711,7 @@ function startAutoDrive() {
         return;
       }
 
-      cesiumView.setProgress(progress + AUTO_DRIVE_SPEED);
+      cesiumView.setProgress(progress + autoDriveSpeed);
       state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
     } else if (state.practiceMap && fallbackVehicle) {
       // 2D fallback: interpolate along routeCoords
@@ -667,7 +721,7 @@ function startAutoDrive() {
         return;
       }
 
-      fallbackProgress += AUTO_DRIVE_SPEED;
+      fallbackProgress += autoDriveSpeed;
       const idx = Math.floor(fallbackProgress);
       const frac = fallbackProgress - idx;
       const c1 = state.routeCoords[idx] || state.routeCoords[maxProgress];
@@ -682,7 +736,7 @@ function startAutoDrive() {
     }
 
     // Update speed display
-    const speedKmh = Math.round(AUTO_DRIVE_SPEED * 400); // approximate
+    const speedKmh = Math.round(autoDriveSpeed * 400); // approximate
     const speedEl = $("hud-speed");
     if (speedEl) speedEl.textContent = speedKmh;
   }, 1000 / 30); // 30 fps
@@ -699,6 +753,32 @@ function stopAutoDrive() {
   const btn = $("btn-autodrive");
   btn.textContent = "▶ Resume";
   btn.classList.remove("active");
+}
+
+function resetSignalHUD() {
+  const leftEl = $("hud-signal-left");
+  const rightEl = $("hud-signal-right");
+  if (leftEl) {
+    leftEl.classList.remove("signal-active-left");
+    leftEl.textContent = "⬅ Signal";
+  }
+  if (rightEl) {
+    rightEl.classList.remove("signal-active-right");
+    rightEl.textContent = "Signal ➡";
+  }
+}
+
+function updateSignalHUD() {
+  const leftEl = $("hud-signal-left");
+  const rightEl = $("hud-signal-right");
+  if (leftEl) {
+    leftEl.classList.toggle("signal-active-left", state.controllerSignals.left);
+    leftEl.textContent = state.controllerSignals.left ? "⬅ Signal On" : "⬅ Signal";
+  }
+  if (rightEl) {
+    rightEl.classList.toggle("signal-active-right", state.controllerSignals.right);
+    rightEl.textContent = state.controllerSignals.right ? "Signal On ➡" : "Signal ➡";
+  }
 }
 
 /* ═══════════════════ RECAP SCREEN ═══════════════════ */
@@ -781,16 +861,22 @@ function resetAppState() {
   state.geminiInsights = null;
   state.excludedHazards = [];
   state.hotspotsOnly = false;
+  state.controllerSignals.left = false;
+  state.controllerSignals.right = false;
   if (state.reportMap) { state.reportMap.remove(); state.reportMap = null; }
   if (state.practiceMap) { state.practiceMap.remove(); state.practiceMap = null; }
   fallbackProgress = 0;
   fallbackVehicle = null;
+  gasHeld = false;
+  brakeHeld = false;
+  autoDriveSpeed = AUTO_DRIVE_SPEED_MIN;
   cesiumView.destroy();
   cesiumInitialized = false;
   $("input-origin").value = "";
   $("input-dest").value = "";
   narration.destroy();
   distractions.destroy();
+  resetSignalHUD();
 }
 
 /* ═══════════════════ MUTE TOGGLE ═══════════════════ */
@@ -935,6 +1021,10 @@ async function loadDemoRoute(file) {
 }
 
 /* ═══════════════════ PHONE CONTROLLER ═══════════════════ */
+function getControllerUrl() {
+  return `${window.location.origin}/controller.html`;
+}
+
 function initPhoneBridge() {
   phoneBridge.onStatus((status, data) => {
     const badge = $("phone-status-badge");
@@ -944,7 +1034,10 @@ function initPhoneBridge() {
       case "room_created":
         badge.textContent = "Waiting for phone...";
         badge.className = "phone-badge waiting";
-        if (codeEl) codeEl.textContent = data;
+        if (codeEl) {
+          codeEl.textContent = data;
+          codeEl.title = `Open ${getControllerUrl()} and enter room code ${data}`;
+        }
         break;
       case "controller_connected":
         badge.textContent = "Phone connected";
@@ -954,6 +1047,11 @@ function initPhoneBridge() {
       case "controller_disconnected":
         badge.textContent = "Phone disconnected";
         badge.className = "phone-badge disconnected";
+        gasHeld = false;
+        brakeHeld = false;
+        state.controllerSignals.left = false;
+        state.controllerSignals.right = false;
+        updateSignalHUD();
         break;
       case "error":
         badge.textContent = data || "Pairing failed";
@@ -963,6 +1061,11 @@ function initPhoneBridge() {
         badge.textContent = "Not paired";
         badge.className = "phone-badge";
         if (codeEl) codeEl.textContent = "----";
+        gasHeld = false;
+        brakeHeld = false;
+        state.controllerSignals.left = false;
+        state.controllerSignals.right = false;
+        updateSignalHUD();
         break;
     }
   });
@@ -973,6 +1076,12 @@ function initPhoneBridge() {
       const maxSteer = 45; // degrees
       cesiumView.setHeadingOffset(input.steering * maxSteer);
     }
+    brakeHeld = !!input.brake;
+    gasHeld = !!input.gas;
+    state.controllerSignals.left = !!input.signalLeft;
+    state.controllerSignals.right = !!input.signalRight;
+    updateSignalHUD();
+
     if (input.brake) {
       if (autoDriving) stopAutoDrive();
       cesiumView.setBrake(true);
@@ -980,6 +1089,7 @@ function initPhoneBridge() {
       cesiumView.setBrake(false);
     }
     if (input.gas && !autoDriving) {
+      autoDriveSpeed = Math.max(autoDriveSpeed, AUTO_DRIVE_SPEED_MIN);
       startAutoDrive();
     }
   });
@@ -991,8 +1101,10 @@ function togglePairPhone() {
     $("phone-status-badge").textContent = "Not paired";
     $("phone-status-badge").className = "phone-badge";
     $("phone-room-code").textContent = "----";
+    resetSignalHUD();
   } else {
     phoneBridge.startHostRoom();
+    showToast(`Phone controller URL: ${getControllerUrl()}`);
   }
 }
 
@@ -1102,6 +1214,11 @@ function init() {
   renderDemoRoutes();
   wireEvents();
   initPhoneBridge();
+  if (!CONFIG.GEMINI_API_KEY || !CONFIG.ELEVENLABS_API_KEY || !CONFIG.GOOGLE_MAPS_KEY) {
+    console.warn("One or more API keys are missing. Set environment variables before starting the server.");
+  }
+  resetSignalHUD();
+  initNgrokModal();
   $("input-origin").focus();
 }
 
