@@ -8,7 +8,7 @@ import * as phoneBridge from "./phone-bridge.js";
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
   GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
-  GOOGLE_MAPS_KEY: "",
+  GOOGLE_MAPS_KEY: "AIzaSyAx1p_zCdc8XkCDFK5-ZWmN-4I0NiTDMM4",
   CESIUM_ION_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxY2RkMzlmZi1lMGI4LTRmNzUtOGU2MS01ZDMxZWM2ODYwOGIiLCJpZCI6NDI1MzE3LCJpYXQiOjE3Nzc0NjM1MjR9.W0oxtmgNcJJMRxnsOA0KzkW4ed3eTXvM4GE4ZCffcQo", // Free Cesium ion → Google Photorealistic 3D Tiles
   ELEVENLABS_API_KEY: "e13d3e5124b3f8f46d11a20d62c4c1cc339d8b7c404d3c01d3afb9fbedea8b9a",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
@@ -209,10 +209,10 @@ async function startScan() {
     // Step 4b: Real-world hazard data from OSM / Overpass
     updateScanStep(statusEl, progressEl, "Checking real-world traffic hazards...", 65);
     try {
-      const accidentHazards = await accidentScanner.scanAccidents(state.routeCoords);
-      if (accidentHazards.length) {
+      const { hazards: osmHazards, excluded } = await accidentScanner.scanAccidents(state.routeCoords);
+      if (osmHazards.length) {
         // Merge, avoiding duplicates close to existing hazards
-        const deduped = accidentHazards.filter((ah) => {
+        const deduped = osmHazards.filter((ah) => {
           const tooClose = state.hazards.some(
             (h) => haversineDistance(h.lat, h.lng, ah.lat, ah.lng) < 40
           );
@@ -221,6 +221,7 @@ async function startScan() {
         state.hazards.push(...deduped);
         state.hazardSummary.total = state.hazards.length;
       }
+      state.excludedHazards = excluded || [];
     } catch (e) {
       console.warn("Accident scan failed (non-critical):", e.message);
     }
@@ -345,6 +346,16 @@ function initReportMap() {
       .on("click", () => scrollToHazard(i));
   });
 
+  // Excluded (off-route) markers in red for transparency
+  if (state.excludedHazards?.length) {
+    state.excludedHazards.forEach((h) => {
+      L.circleMarker([h.lat, h.lng], {
+        radius: 6, fillColor: "#ff0000", fillOpacity: 0.4, color: "#ff0000", weight: 1,
+      }).addTo(state.reportMap)
+        .bindPopup(`<b>Excluded: ${h.label}</b><br>Not on your route (${Math.round(h.dist || 0)}m away)`);
+    });
+  }
+
   state.reportMap.fitBounds(routeLine.getBounds().pad(0.1));
 }
 
@@ -369,7 +380,7 @@ function renderHazardList() {
       <div class="hazard-header">
         <span class="hazard-badge ${h.severity}">${h.severity}</span>
         <span class="hazard-type">${h.type.replace(/_/g, " ")}</span>
-        ${h.source === "gemini" ? '<span class="ai-badge">AI</span>' : ""}
+        ${h.source === "gemini" ? '<span class="ai-badge">AI</span>' : h.source === "overpass" ? '<span class="osm-badge">OSM</span>' : h.source === "geometry" ? '<span class="geo-badge">GEO</span>' : ""}
       </div>
       <h3 class="hazard-title">${h.label}</h3>
       <p class="hazard-desc">${h.description}</p>
@@ -400,10 +411,6 @@ async function startPractice(index = 0) {
   renderPracticeInfo();
 
   if (!cesiumInitialized) {
-    // Set Cesium ion token for Google Photorealistic 3D Tiles
-    if (CONFIG.CESIUM_ION_TOKEN) {
-      Cesium.Ion.defaultAccessToken = CONFIG.CESIUM_ION_TOKEN;
-    }
     try {
       await cesiumView.initView("cesium-container", state.routeCoords, state.hazards, {
         onProgress: updateHUD,
@@ -422,11 +429,9 @@ async function startPractice(index = 0) {
 
   // Jump to the hazard in the 3D view
   cesiumView.jumpToHazard(index);
-  if (state.hotspotsOnly) {
-    switchMode("overview"); // Hotspots-only: start in overview so user can look around
-  } else {
-    switchMode("drive"); // Full-route: default to drive mode for auto-drive
-  }
+  // Always start in overview mode so user sees the 2D route context first,
+  // then manually switches to drive when ready
+  switchMode("overview");
 }
 
 function renderPracticeInfo() {

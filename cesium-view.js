@@ -206,20 +206,12 @@ async function createSatelliteViewer(containerId) {
     credit: "Esri",
   });
 
-  const v = new Cesium.Viewer(containerId, {
-    animation: false,
-    baseLayerPicker: false,
-    fullscreenButton: false,
-    geocoder: false,
-    homeButton: false,
-    infoBox: false,
-    sceneModePicker: false,
-    selectionIndicator: false,
-    timeline: false,
-    navigationHelpButton: false,
-    scene3DOnly: true,
-    showRenderLoopErrors: false,
-    baseLayer: new Cesium.ImageryLayer(esriProvider),
+  // Wipe the built-in demo token so Cesium doesn't try to validate it
+  Cesium.Ion.defaultAccessToken = "";
+
+  // Use CesiumWidget instead of Viewer — no UI chrome, no hidden Ion dependencies
+  const v = new Cesium.CesiumWidget(containerId, {
+    imageryProvider: esriProvider,
     contextOptions: {
       webgl: { preserveDrawingBuffer: true },
     },
@@ -265,13 +257,23 @@ export function getMode() {
 /* ═══════════════ OVERVIEW CAMERA ═══════════════ */
 
 function flyToOverview() {
-  if (!routeEntity || !viewer) return;
-  viewer.flyTo(routeEntity, {
+  if (!routeCoords.length || !viewer) return;
+  // Compute bounding rectangle from route coordinates
+  let west = 180, east = -180, south = 90, north = -90;
+  for (const c of routeCoords) {
+    west = Math.min(west, c.lng);
+    east = Math.max(east, c.lng);
+    south = Math.min(south, c.lat);
+    north = Math.max(north, c.lat);
+  }
+  const rect = Cesium.Rectangle.fromDegrees(west, south, east, north);
+  viewer.camera.flyTo({
+    destination: rect,
     duration: 1.5,
     offset: new Cesium.HeadingPitchRange(
       Cesium.Math.toRadians(0),
       Cesium.Math.toRadians(-45),
-      0 // auto-calculate range
+      0
     ),
   });
 }

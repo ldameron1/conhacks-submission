@@ -62,6 +62,8 @@ function buildQuery(bbox) {
       way["maxspeed"~"^[1-3][0-9]$"](${bbox});
       node["railway"="level_crossing"](${bbox});
       node["railway"="crossing"](${bbox});
+      way["tunnel"="yes"](${bbox});
+      way["tunnel"="building_passage"](${bbox});
     );
     out body center;
   `;
@@ -179,6 +181,22 @@ function parseElement(el, lat, lon, dist) {
     };
   }
 
+  if (tags.tunnel === "yes" || tags.tunnel === "building_passage") {
+    return {
+      type: "tunnel",
+      label: tags.tunnel === "building_passage" ? "Covered Road / Building Passage" : "Tunnel",
+      severity: "medium",
+      lat,
+      lng: lon,
+      distance: Math.round(dist),
+      description: tags.tunnel === "building_passage"
+        ? "Road passes through a building — reduced visibility and clearance."
+        : "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      tip: "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      source: "overpass",
+    };
+  }
+
   if (tags.surface && /gravel|unpaved|dirt|mud|sand|compacted/.test(tags.surface)) {
     return {
       type: "poor_surface",
@@ -215,10 +233,10 @@ function parseElement(el, lat, lon, dist) {
 /**
  * Scan the route for real-world hazards using the Overpass API.
  * @param {Array<[number,number]>} coords  GeoJSON [lng,lat] route coordinates.
- * @returns {Promise<Array>}  Hazard objects ready to merge into the main list.
+ * @returns {Promise<{hazards:Array, excluded:Array}>}  On-route hazards + nearby excluded features.
  */
 export async function scanAccidents(coords) {
-  if (!coords || coords.length < 2) return [];
+  if (!coords || coords.length < 2) return { hazards: [], excluded: [] };
 
   const bbox = bboxFromRoute(coords);
   const query = buildQuery(bbox);
@@ -235,21 +253,24 @@ export async function scanAccidents(coords) {
     }
 
     const data = await res.json();
-    if (!data.elements) return [];
+    if (!data.elements) return { hazards: [], excluded: [] };
 
     const hazards = [];
+    const excluded = []; // features found by Overpass but too far from route
     for (const el of data.elements) {
       const lat = el.lat ?? el.center?.lat;
       const lon = el.lon ?? el.center?.lon;
       if (lat == null || lon == null) continue;
 
       const dist = distanceToRoute({ lat, lon }, coords);
-      if (dist > 50) continue; // only keep hazards on or immediately adjacent to the route
-
       const h = parseElement(el, lat, lon, dist);
-      if (h) {
-        h.source = "overpass";
-        hazards.push(h);
+      if (!h) continue;
+      h.source = "overpass";
+
+      if (dist <= 30) {
+        hazards.push(h); // on or immediately adjacent to the route
+      } else if (dist <= 120) {
+        excluded.push(h); // in query area but likely on parallel road / detour
       }
     }
 
@@ -262,9 +283,9 @@ export async function scanAccidents(coords) {
       if (!tooClose) deduped.push(h);
     }
 
-    return deduped;
+    return { hazards: deduped, excluded };
   } catch (e) {
     console.warn("[AccidentScanner] Overpass query failed:", e.message);
-    return [];
+    return { hazards: [], excluded: [] };
   }
 }
