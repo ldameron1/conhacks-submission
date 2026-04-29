@@ -504,6 +504,9 @@ function onHazardApproach(hazard, index, dist) {
 }
 
 /* ═══════════════════ 2D FALLBACK ═══════════════════ */
+let fallbackProgress = 0; // 0..routeCoords.length-1
+let fallbackVehicle = null;
+
 function render2DFallback() {
   cesiumInitialized = false;
   $("cesium-container").classList.add("hidden");
@@ -543,6 +546,17 @@ function render2DFallback() {
       weight: 2
     }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
   });
+
+  // Vehicle marker
+  fallbackProgress = 0;
+  const startPos = latLngs[0] || [h.lat, h.lng];
+  fallbackVehicle = L.circleMarker(startPos, {
+    radius: 10,
+    fillColor: "#00d4aa",
+    fillOpacity: 1,
+    color: "#fff",
+    weight: 3,
+  }).addTo(state.practiceMap);
 }
 
 function nextHazard() {
@@ -607,28 +621,45 @@ function startAutoDrive() {
   // Auto-advance is handled by cesium-view's animation loop via keyboard simulation
   // We'll use setInterval to feed progress updates
   autoDriveInterval = setInterval(() => {
-    if (!cesiumInitialized) return;
-
-    const progress = cesiumView.getProgress();
     const maxProgress = state.routeCoords.length - 1;
 
-    if (progress >= maxProgress - 1) {
-      // Route complete
-      stopAutoDrive();
-      finishRehearsal();
-      return;
-    }
+    if (cesiumInitialized) {
+      const progress = cesiumView.getProgress();
 
-    // Advance
-    cesiumView.setProgress(progress + AUTO_DRIVE_SPEED);
+      if (progress >= maxProgress - 1) {
+        stopAutoDrive();
+        finishRehearsal();
+        return;
+      }
+
+      cesiumView.setProgress(progress + AUTO_DRIVE_SPEED);
+      state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
+    } else if (state.practiceMap && fallbackVehicle) {
+      // 2D fallback: interpolate along routeCoords
+      if (fallbackProgress >= maxProgress - 1) {
+        stopAutoDrive();
+        finishRehearsal();
+        return;
+      }
+
+      fallbackProgress += AUTO_DRIVE_SPEED;
+      const idx = Math.floor(fallbackProgress);
+      const frac = fallbackProgress - idx;
+      const c1 = state.routeCoords[idx] || state.routeCoords[maxProgress];
+      const c2 = state.routeCoords[idx + 1] || c1;
+      const lat = c1[1] + (c2[1] - c1[1]) * frac;
+      const lng = c1[0] + (c2[0] - c1[0]) * frac;
+
+      fallbackVehicle.setLatLng([lat, lng]);
+      state.practiceMap.panTo([lat, lng]);
+
+      state.rehearsal.routeCompletion = Math.round((fallbackProgress / maxProgress) * 100);
+    }
 
     // Update speed display
     const speedKmh = Math.round(AUTO_DRIVE_SPEED * 400); // approximate
     const speedEl = $("hud-speed");
     if (speedEl) speedEl.textContent = speedKmh;
-
-    // Track completion
-    state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
   }, 1000 / 30); // 30 fps
 }
 
@@ -759,6 +790,97 @@ function renderExamples() {
     });
     container.appendChild(chip);
   });
+}
+
+/* ═══════════════════ DEMO ROUTES (offline, no API) ═══════════════════ */
+const DEMO_ROUTES = [
+  { file: "data/demo-routes/downtown-garage.json", label: "Downtown Garage" },
+  { file: "data/demo-routes/airport-merge.json", label: "Airport Merge" },
+];
+
+function renderDemoRoutes() {
+  const container = $("demo-routes");
+  DEMO_ROUTES.forEach((demo) => {
+    const chip = document.createElement("button");
+    chip.className = "example-chip";
+    chip.textContent = demo.label;
+    chip.addEventListener("click", () => loadDemoRoute(demo.file));
+    container.appendChild(chip);
+  });
+}
+
+async function loadDemoRoute(file) {
+  try {
+    const res = await fetch(file);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Build continuous routeCoords from segment geometry
+    const coords = [];
+    data.segments.forEach((seg) => {
+      const s = seg.geometry.start;
+      const e = seg.geometry.end;
+      // Add start if not duplicate of previous end
+      if (coords.length === 0 ||
+          coords[coords.length - 1][0] !== s.lng ||
+          coords[coords.length - 1][1] !== s.lat) {
+        coords.push([s.lng, s.lat]);
+      }
+      coords.push([e.lng, e.lat]);
+    });
+
+    // Build routeSteps from segments (OSRM-like format for downstream compat)
+    const steps = data.segments.map((seg) => ({
+      maneuver: {
+        instruction: seg.instruction,
+        type: seg.kind,
+        location: [seg.geometry.start.lng, seg.geometry.start.lat],
+      },
+      name: seg.roadContext?.roadName || "",
+      distance: seg.distanceM,
+      duration: seg.durationSec,
+    }));
+
+    // Build hazards from painPoints (use segment end as location)
+    const hazards = (data.painPoints || []).map((pp) => {
+      const seg = data.segments.find((s) => s.id === pp.segmentId) || data.segments[0];
+      const loc = seg ? seg.geometry.end : data.segments[0]?.geometry.end;
+      return {
+        lat: loc?.lat ?? 0,
+        lng: loc?.lng ?? 0,
+        label: pp.title,
+        description: pp.description,
+        tip: pp.rehearsalFocus || "Watch this area carefully.",
+        severity: pp.severity,
+        type: pp.type,
+        source: "demo",
+        tags: pp.tags || [],
+      };
+    });
+
+    // Populate state
+    state.origin = { lat: data.origin.lat, lng: data.origin.lng, label: data.origin.label };
+    state.destination = { lat: data.destination.lat, lng: data.destination.lng, label: data.destination.label };
+    state.routeCoords = coords;
+    state.routeSteps = steps;
+    state.routeDistance = data.estimatedDistanceM;
+    state.routeDuration = data.estimatedDurationSec;
+    state.hazards = hazards;
+    state.hazardSummary = {
+      total: hazards.length,
+      high: hazards.filter((h) => h.severity === "high").length,
+      medium: hazards.filter((h) => h.severity === "medium").length,
+      low: hazards.filter((h) => h.severity === "low").length,
+    };
+    state.geminiInsights = null;
+    state.excludedHazards = [];
+
+    showReport();
+    showToast(`Loaded demo route: ${data.title}`);
+  } catch (err) {
+    console.error("Demo load failed:", err);
+    showToast("Failed to load demo route.");
+  }
 }
 
 /* ═══════════════════ PHONE CONTROLLER ═══════════════════ */
@@ -944,6 +1066,7 @@ function wireEvents() {
 function init() {
   showScreen("input");
   renderExamples();
+  renderDemoRoutes();
   wireEvents();
   initPhoneBridge();
   $("input-origin").focus();
