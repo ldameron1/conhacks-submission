@@ -91,6 +91,8 @@ export async function initView(containerId, coords, hazards, cbs) {
 
   // Cleanup any previous viewer
   destroy();
+  const container = document.getElementById(containerId);
+  if (container) container.innerHTML = "";
 
   // Check for Cesium ion token (set from app.js before calling initView)
   const hasIonToken = Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 10;
@@ -219,16 +221,25 @@ async function createSatelliteViewer(containerId) {
   // Wipe the built-in demo token so Cesium doesn't try to validate it
   Cesium.Ion.defaultAccessToken = "";
 
-  // Use CesiumWidget instead of Viewer — no UI chrome, no hidden Ion dependencies
-  const v = new Cesium.CesiumWidget(containerId, {
-    imageryProvider: esriProvider,
-    contextOptions: {
-      webgl: { 
-        preserveDrawingBuffer: true,
-        allowIfMajorPerformanceCaveat: true
-      },
-    },
+  // Use Viewer with all UI disabled
+  const v = new Cesium.Viewer(containerId, {
+    baseLayer: false,
+    animation: false,
+    baseLayerPicker: false,
+    fullscreenButton: false,
+    geocoder: false,
+    homeButton: false,
+    infoBox: false,
+    sceneModePicker: false,
+    selectionIndicator: false,
+    timeline: false,
+    navigationHelpButton: false,
+    scene3DOnly: true,
+    showRenderLoopErrors: false,
+    orderIndependentTranslucency: false
   });
+
+  v.scene.imageryLayers.addImageryProvider(esriProvider);
 
   v.scene.globe.show = true;
   v.scene.globe.depthTestAgainstTerrain = true;
@@ -239,13 +250,21 @@ async function createSatelliteViewer(containerId) {
  * Creates a photorealistic 3D tiles viewer using Google Earth data via Cesium ion.
  */
 async function createPhotorealisticViewer(containerId) {
-  const v = new Cesium.CesiumWidget(containerId, {
-    contextOptions: {
-      webgl: { 
-        preserveDrawingBuffer: true,
-        allowIfMajorPerformanceCaveat: true
-      },
-    },
+  const v = new Cesium.Viewer(containerId, {
+    baseLayer: false,
+    animation: false,
+    baseLayerPicker: false,
+    fullscreenButton: false,
+    geocoder: false,
+    homeButton: false,
+    infoBox: false,
+    sceneModePicker: false,
+    selectionIndicator: false,
+    timeline: false,
+    navigationHelpButton: false,
+    scene3DOnly: true,
+    showRenderLoopErrors: false,
+    orderIndependentTranslucency: false
   });
 
   try {
@@ -323,6 +342,7 @@ function updateDriveCamera() {
   if (!viewer) return;
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
+  console.log("[updateDriveCamera]", pos.lng, pos.lat, DRIVER_HEIGHT, heading);
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT),

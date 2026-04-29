@@ -782,6 +782,7 @@ async function showTriPane() {
     const triPane = $("tri-pane-container");
     if (!triPane) return;
     triPane.style.display = "flex";
+    $("tri-cesium-container").style.display = "block";
     $("drive-hud").classList.remove("hidden");
 
     // Initialise Cesium on-demand if needed
@@ -793,6 +794,7 @@ async function showTriPane() {
       }
 
       try {
+        await sleep(50); // Force layout reflow so container has >0 size
         await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
           onProgress: updateHUD,
           onHazardApproach: onHazardApproach,
@@ -950,22 +952,9 @@ let autoDriveSpeed = AUTO_DRIVE_SPEED_MIN;
 let gasHeld = false;
 let brakeHeld = false;
 
-function toggleAutoDrive() {
-  if (autoDriving) {
-    stopAutoDrive();
-  } else {
-    startAutoDrive();
-  }
-}
-
 function startAutoDrive() {
   autoDriving = true;
   state.rehearsal.startTime = state.rehearsal.startTime || Date.now();
-
-  const btn = $("btn-autodrive");
-  btn.textContent = "⏸ Pause";
-  btn.classList.add("active");
-  $("btn-finish").style.display = "inline-block";
 
   // Start distraction audio
   distractions.start();
@@ -1025,7 +1014,6 @@ function startAutoDrive() {
     if (speedEl) speedEl.textContent = speedKmh;
   }, 1000 / 30); // 30 fps
 }
-
 function stopAutoDrive() {
   autoDriving = false;
   clearInterval(autoDriveInterval);
@@ -1034,12 +1022,7 @@ function stopAutoDrive() {
 
   // Pause distractions too
   distractions.stop();
-
-  const btn = $("btn-autodrive");
-  btn.textContent = "▶ Resume";
-  btn.classList.remove("active");
 }
-
 function resetSignalHUD() {
   const leftEl = $("hud-signal-left");
   const rightEl = $("hud-signal-right");
@@ -1539,10 +1522,8 @@ function wireEvents() {
   });
 
   // Auto-drive controls
-  $("btn-autodrive").addEventListener("click", toggleAutoDrive);
   $("btn-mute").addEventListener("click", toggleMute);
   $("btn-difficulty").addEventListener("click", cycleDifficulty);
-  $("btn-finish").addEventListener("click", finishRehearsal);
 
   // Phone controller
   const btnPair = $("btn-pair-phone");
