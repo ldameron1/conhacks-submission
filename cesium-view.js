@@ -213,7 +213,10 @@ async function createSatelliteViewer(containerId) {
   const v = new Cesium.CesiumWidget(containerId, {
     imageryProvider: esriProvider,
     contextOptions: {
-      webgl: { preserveDrawingBuffer: true },
+      webgl: { 
+        preserveDrawingBuffer: true,
+        allowIfMajorPerformanceCaveat: true
+      },
     },
   });
 

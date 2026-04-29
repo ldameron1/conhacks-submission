@@ -48,6 +48,31 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function toggleStreetView() {
+  const overlay = $("streetview-overlay");
+  if (!overlay) return;
+  const isHidden = overlay.classList.contains("hidden");
+  if (isHidden) {
+    overlay.classList.remove("hidden");
+    const content = $("streetview-content");
+    if (content) {
+      const h = state.hazards[state.practiceIndex];
+      if (h && CONFIG.GOOGLE_MAPS_KEY) {
+        const lat = h.lat;
+        const lng = h.lng;
+        content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
+          src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
+          style="border:0; width:100%; height:100%;"></iframe>`;
+      } else {
+        content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;">
+          StreetView unavailable — no API key or hazard position.</div>`;
+      }
+    }
+  } else {
+    overlay.classList.add("hidden");
+  }
+}
+
 function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -742,6 +767,32 @@ function resetRehearsal() {
   };
 }
 
+function resetAppState() {
+  resetRehearsal();
+  state.origin = null;
+  state.destination = null;
+  state.routeCoords = [];
+  state.routeSteps = [];
+  state.routeDistance = 0;
+  state.routeDuration = 0;
+  state.hazards = [];
+  state.hazardSummary = {};
+  state.practiceIndex = 0;
+  state.geminiInsights = null;
+  state.excludedHazards = [];
+  state.hotspotsOnly = false;
+  if (state.reportMap) { state.reportMap.remove(); state.reportMap = null; }
+  if (state.practiceMap) { state.practiceMap.remove(); state.practiceMap = null; }
+  fallbackProgress = 0;
+  fallbackVehicle = null;
+  cesiumView.destroy();
+  cesiumInitialized = false;
+  $("input-origin").value = "";
+  $("input-dest").value = "";
+  narration.destroy();
+  distractions.destroy();
+}
+
 /* ═══════════════════ MUTE TOGGLE ═══════════════════ */
 function toggleMute() {
   const muted = !narration.isMuted();
@@ -985,8 +1036,7 @@ function wireEvents() {
   $("btn-prev-hazard").addEventListener("click", prevHazard);
   $("btn-next-hazard").addEventListener("click", nextHazard);
   $("btn-new-route").addEventListener("click", () => {
-    cesiumView.destroy();
-    cesiumInitialized = false;
+    resetAppState();
     showScreen("input");
   });
 
@@ -1024,27 +1074,10 @@ function wireEvents() {
     startPractice(0);
   });
   $("btn-recap-new").addEventListener("click", () => {
-    resetRehearsal();
-    narration.destroy();
-    distractions.destroy();
+    resetAppState();
     showScreen("input");
   });
 
-  function toggleStreetView() {
-    const overlay = $("streetview-overlay");
-    if (!overlay) return;
-    const isHidden = overlay.classList.contains("hidden");
-    if (isHidden) {
-      overlay.classList.remove("hidden");
-      // Position StreetView at current camera location
-      if (cesiumInitialized) {
-        const pos = cesiumView.getProgress ? null : null; // cannot get lat/lng easily here
-        // Fallback: show generic embed or deep link
-      }
-    } else {
-      overlay.classList.add("hidden");
-    }
-  }
 
   // Escape to go back
   document.addEventListener("keydown", (e) => {
