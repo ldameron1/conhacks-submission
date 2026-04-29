@@ -3,7 +3,7 @@ import { scanRoute } from "./hazard-scanner.js";
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
   GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
-  GOOGLE_MAPS_KEY: "AIzaSyAx1p_zCdc8XkCDFK5-ZWmN-4I0NiTDMM4",
+  GOOGLE_MAPS_KEY: "", // Not needed — satellite map + SV link is 100% free
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
   NOMINATIM_URL: "https://nominatim.openstreetmap.org/search",
   DARK_TILES: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -92,18 +92,30 @@ async function analyzeWithGemini(steps, geometryHazards) {
     .map((h) => `- ${h.label} at [${h.lat.toFixed(4)}, ${h.lng.toFixed(4)}]: ${h.description}`)
     .join("\n");
 
-  const prompt = `You are a driving safety analyst. Analyze this route for an unfamiliar driver.
+  const prompt = `You are an expert driving coach analyzing a route for someone who has NEVER driven it before. Focus on the things GPS apps get wrong — they tell you WHERE to turn but not HOW to prepare.
 
 Turn-by-turn directions:
 ${stepsText}
 
-Already detected hazards:
+Already detected hazards from geometry analysis:
 ${hazardText || "None detected from geometry."}
 
-For each additional confusion point you identify (max 5), respond with a JSON array:
-[{"title":"...","reason":"...","tip":"...","severity":"low|medium|high","stepIndex":N}]
+Look for these specific issues that confuse real drivers:
 
-If no additional hazards, respond with an empty array []. Only output valid JSON, no extra text.`;
+1. LANE POSITIONING: Where do you need to be in a specific lane EARLY? Example: "3 highway lanes all go the same direction, but the leftmost lane is actually best because it feeds into the correct lane for your next turn." GPS never tells you this.
+
+2. CONFUSING SIGNAGE: Places where road signs might show names/numbers for roads you're NOT taking, or where multiple similar signs appear close together. Exit splits like "148A vs 148B" are classic confusion points.
+
+3. HIDDEN OR TRICKY TURNS: Turns that are easy to miss because they're obscured, poorly marked, or come right after another maneuver. Also right-turn-from-left-lane type situations.
+
+4. MERGE/EXIT TIMING: Highway situations where you need to merge or exit quickly after another maneuver. Getting across 3 lanes in 200m is stressful.
+
+5. ROAD LAYOUT SURPRISES: One-way streets, roads that suddenly change from 2 lanes to 1, or intersections where the "straight" path actually curves.
+
+For each issue you find (max 6), respond as a JSON array. Be specific and practical — give advice a driving instructor would give:
+[{"title":"Short specific title","reason":"Why this confuses drivers (1-2 sentences)","tip":"Exactly what to do — which lane, when to move, what to look for","severity":"low|medium|high","stepIndex":N}]
+
+If the route is straightforward with no issues, respond []. Only output valid JSON.`;
 
   try {
     const res = await fetch(
@@ -345,48 +357,43 @@ function renderPracticeView(h) {
   const container = $("practice-view");
   const svUrl = streetViewUrl(h.lat, h.lng, h.heading);
 
-  if (CONFIG.GOOGLE_MAPS_KEY) {
-    // Inline Street View via Embed API + link to open full screen
-    container.innerHTML = `<iframe
-      src="https://www.google.com/maps/embed/v1/streetview?key=${CONFIG.GOOGLE_MAPS_KEY}&location=${h.lat},${h.lng}&heading=${h.heading || 0}&pitch=0&fov=90"
-      class="streetview-frame" allowfullscreen loading="eager"></iframe>
-      <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
-        🔍 Open full Street View
-      </a>`;
-  } else {
-    // Fallback: satellite map + open-in-maps link
-    container.innerHTML = `<div id="practice-map-inner" class="practice-map-inner"></div>
-      <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
-        🔍 Open in Google Street View
-      </a>`;
+  // Always show satellite map with route overlay + Street View link
+  container.innerHTML = `<div id="practice-map-inner" class="practice-map-inner"></div>
+    <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
+      🔍 Open in Google Street View
+    </a>`;
 
-    if (state.practiceMap) { state.practiceMap.remove(); state.practiceMap = null; }
+  if (state.practiceMap) { state.practiceMap.remove(); state.practiceMap = null; }
 
-    // Use requestAnimationFrame to ensure the container is laid out before Leaflet init
-    requestAnimationFrame(() => {
-      state.practiceMap = L.map("practice-map-inner", { zoomControl: false }).setView([h.lat, h.lng], 17);
-      L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.practiceMap);
+  requestAnimationFrame(() => {
+    state.practiceMap = L.map("practice-map-inner", { zoomControl: true }).setView([h.lat, h.lng], 17);
+    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.practiceMap);
 
-      // Draw route
-      const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-      L.polyline(latLngs, { color: "#00d4aa", weight: 4, opacity: 0.8 }).addTo(state.practiceMap);
+    // Draw route
+    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+    L.polyline(latLngs, { color: "#00d4aa", weight: 4, opacity: 0.8 }).addTo(state.practiceMap);
 
-      // Hazard marker
-      L.circleMarker([h.lat, h.lng], {
-        radius: 14, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 3,
+    // All hazard markers (dimmed)
+    state.hazards.forEach((hz, idx) => {
+      const isActive = idx === state.practiceIndex;
+      L.circleMarker([hz.lat, hz.lng], {
+        radius: isActive ? 14 : 8,
+        fillColor: isActive ? "#ff4466" : "#ffaa00",
+        fillOpacity: isActive ? 0.95 : 0.4,
+        color: "#fff",
+        weight: isActive ? 3 : 1,
       }).addTo(state.practiceMap);
-
-      // Heading arrow
-      const arrowLat = h.lat + 0.0003 * Math.cos((h.heading || 0) * Math.PI / 180);
-      const arrowLng = h.lng + 0.0003 * Math.sin((h.heading || 0) * Math.PI / 180);
-      L.polyline([[h.lat, h.lng], [arrowLat, arrowLng]], {
-        color: "#ffaa00", weight: 3, dashArray: "6 4",
-      }).addTo(state.practiceMap);
-
-      // Force Leaflet to recalculate size after layout
-      setTimeout(() => state.practiceMap?.invalidateSize(), 100);
     });
-  }
+
+    // Heading arrow for active hazard
+    const arrowLat = h.lat + 0.0004 * Math.cos((h.heading || 0) * Math.PI / 180);
+    const arrowLng = h.lng + 0.0004 * Math.sin((h.heading || 0) * Math.PI / 180);
+    L.polyline([[h.lat, h.lng], [arrowLat, arrowLng]], {
+      color: "#ffaa00", weight: 3, dashArray: "6 4",
+    }).addTo(state.practiceMap);
+
+    setTimeout(() => state.practiceMap?.invalidateSize(), 100);
+  });
 }
 
 function nextHazard() {

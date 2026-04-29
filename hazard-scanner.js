@@ -166,6 +166,113 @@ export function analyzeSteps(steps) {
   return hazards;
 }
 
+/* ───────────────── Lane Strategy Detection ───────────────── */
+
+/**
+ * Detect places where you need to be in a specific lane EARLY because
+ * a turn is coming soon after joining a road or after another maneuver.
+ * e.g. "Get in the left lane now because you turn left in 400m"
+ */
+export function detectLaneStrategy(steps) {
+  const hazards = [];
+  if (!steps || steps.length < 2) return hazards;
+
+  for (let i = 0; i < steps.length - 1; i++) {
+    const curr = steps[i];
+    const next = steps[i + 1];
+    const currM = curr.maneuver || {};
+    const nextM = next.maneuver || {};
+    const nextModifier = (nextM.modifier || "").toLowerCase();
+    const nextType = (nextM.type || "").toLowerCase();
+
+    // Skip if next step isn't a meaningful turn
+    if (nextType === "new name" || nextType === "depart" || nextType === "arrive") continue;
+    if (nextModifier === "straight") continue;
+
+    // Check if current step is short (under 500m) — meaning the turn comes up fast
+    const currDist = curr.distance || 0;
+    if (currDist > 0 && currDist < 500 && (nextModifier.includes("left") || nextModifier.includes("right"))) {
+      const side = nextModifier.includes("left") ? "left" : "right";
+      const loc = currM.location || [0, 0];
+      const urgency = currDist < 200 ? "high" : "medium";
+
+      hazards.push({
+        type: "lane_positioning",
+        label: `Get in ${side} lane early`,
+        severity: urgency,
+        lat: loc[1],
+        lng: loc[0],
+        stepIndex: i,
+        heading: Math.round(currM.bearing_after || 0),
+        description: `You need to turn ${nextModifier} in ${Math.round(currDist)}m onto ${next.name || "the next road"}. Get into the ${side} lane as soon as you enter ${curr.name || "this road"}.`,
+        tip: `Move to the ${side} lane immediately — the turn comes up fast and you won't have time to change lanes later.`,
+        road: curr.name || "",
+        instruction: nextM.instruction || "",
+      });
+    }
+
+    // Detect: fork/ramp coming soon after a turn — need to be in correct lane
+    if ((nextType === "fork" || nextType === "off ramp") && currDist > 0 && currDist < 800) {
+      const loc = currM.location || [0, 0];
+      hazards.push({
+        type: "lane_positioning",
+        label: `Prepare for ${nextType === "fork" ? "fork" : "exit"} ahead`,
+        severity: "medium",
+        lat: loc[1],
+        lng: loc[0],
+        stepIndex: i,
+        heading: Math.round(currM.bearing_after || 0),
+        description: `A ${nextType === "fork" ? "road fork" : "highway exit"} comes up ${Math.round(currDist)}m after this point. You need to be in the correct lane before you get there.`,
+        tip: `Read overhead signs carefully and position yourself in the correct lane now, not at the last second.`,
+        road: curr.name || "",
+      });
+    }
+  }
+  return hazards;
+}
+
+/* ───────────────── Confusing Signage / Rapid Road Changes ───────────────── */
+
+/**
+ * Detect areas where road names change rapidly or where multiple turns
+ * happen on different roads in quick succession — confusing signage zones.
+ */
+export function detectConfusingSignage(steps) {
+  const hazards = [];
+  if (!steps || steps.length < 3) return hazards;
+
+  for (let i = 0; i < steps.length - 2; i++) {
+    const a = steps[i];
+    const b = steps[i + 1];
+    const c = steps[i + 2];
+
+    // Three different road names in quick succession
+    const nameA = (a.name || "").toLowerCase();
+    const nameB = (b.name || "").toLowerCase();
+    const nameC = (c.name || "").toLowerCase();
+
+    if (nameA && nameB && nameC && nameA !== nameB && nameB !== nameC && nameA !== nameC) {
+      const totalDist = (a.distance || 0) + (b.distance || 0);
+      if (totalDist > 0 && totalDist < 600) {
+        const loc = b.maneuver?.location || [0, 0];
+        hazards.push({
+          type: "confusing_signage",
+          label: "Rapid road changes — watch signs",
+          severity: "medium",
+          lat: loc[1],
+          lng: loc[0],
+          stepIndex: i + 1,
+          heading: Math.round(b.maneuver?.bearing_after || 0),
+          description: `Three different roads (${a.name || "?"} → ${b.name || "?"} → ${c.name || "?"}) in ${Math.round(totalDist)}m. Signs can be confusing when roads change this quickly.`,
+          tip: `Follow the road name on your navigation, not the overhead signs — they may show names for roads you're NOT taking.`,
+          road: b.name || "",
+        });
+      }
+    }
+  }
+  return hazards;
+}
+
 /* ───────────────── Decision Cluster Detection ───────────────── */
 
 /**
@@ -236,8 +343,10 @@ export function scanRoute(coords, steps) {
   const sharpTurns = detectSharpTurns(coords, 40);
   const stepHazards = analyzeSteps(steps);
   const clusters = detectClusters(coords, steps);
+  const laneHazards = detectLaneStrategy(steps);
+  const signageHazards = detectConfusingSignage(steps);
 
-  let all = [...sharpTurns, ...stepHazards, ...clusters];
+  let all = [...sharpTurns, ...stepHazards, ...clusters, ...laneHazards, ...signageHazards];
   all = dedup(all);
 
   // Sort by position along route (coordIndex or stepIndex)
