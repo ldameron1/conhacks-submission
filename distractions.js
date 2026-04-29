@@ -56,12 +56,50 @@ let audioCache = new Map();
 let scheduledTimeouts = [];
 let activeAudio = null;
 let isRunning = false;
+let recognition = null;
+let userSpokeCallback = null;
 
 /* ═══════════════ INIT ═══════════════ */
 
 export function init(key) {
   apiKey = key;
   stop();
+}
+
+export function onUserSpoke(cb) {
+  userSpokeCallback = cb;
+}
+
+function startListening() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  try {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    
+    recognition.onresult = (event) => {
+      if (!isRunning) return;
+      // If any speech is recognized, the user took the bait and talked back
+      const transcript = event.results[event.results.length - 1][0].transcript;
+      if (transcript.trim().length > 0 && userSpokeCallback) {
+        userSpokeCallback(transcript);
+      }
+    };
+
+    recognition.onerror = () => {}; // Ignore errors (e.g. no mic)
+    recognition.onend = () => {
+      // Auto-restart if still running
+      if (isRunning) {
+        try { recognition.start(); } catch(e) {}
+      }
+    };
+
+    recognition.start();
+  } catch (e) {
+    console.warn("Speech recognition failed to start:", e);
+  }
 }
 
 export function setDifficulty(level) {
@@ -130,6 +168,10 @@ export function start() {
   if (currentDifficulty === "calm" || !apiKey) return;
   isRunning = true;
 
+  if (currentDifficulty === "intense") {
+    startListening();
+  }
+
   const scripts = SCRIPTS[currentDifficulty] || [];
   
   scripts.forEach((script, i) => {
@@ -147,6 +189,9 @@ export function start() {
 
 export function stop() {
   isRunning = false;
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
+  }
   scheduledTimeouts.forEach(clearTimeout);
   scheduledTimeouts = [];
   if (activeAudio) {

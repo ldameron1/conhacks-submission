@@ -1299,6 +1299,10 @@ async function loadDemoRoute(file) {
       state.hazardSummary = data.hazardSummary;
       state.geminiInsights = data.geminiInsights;
       state.excludedHazards = [];
+
+      narration.init(CONFIG.ELEVENLABS_API_KEY);
+      distractions.init(CONFIG.ELEVENLABS_API_KEY);
+
       showReport();
       showToast(`Loaded demo route: ${data.title}`);
       return;
@@ -1528,6 +1532,18 @@ function wireEvents() {
   // Phone controller
   const btnPair = $("btn-pair-phone");
   if (btnPair) btnPair.addEventListener("click", togglePairPhone);
+
+  // Distraction failure tracking
+  distractions.onUserSpoke((transcript) => {
+    if (autoDriving && currentPracticePass === 3) {
+      console.log("[Distractions] User spoke:", transcript);
+      showToast("❌ Speech detected! Keep your eyes on the road!");
+      const alertEl = $("hud-alert");
+      alertEl.textContent = `❌ DISTRACTION DETECTED: You spoke!`;
+      alertEl.classList.add("visible");
+      setTimeout(() => alertEl.classList.remove("visible"), 4000);
+    }
+  });
 
   // Settings overlay
   const btnSettingsContinue = $("btn-settings-continue");
