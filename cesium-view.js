@@ -101,6 +101,30 @@ async function sampleRouteHeights() {
   }
 }
 
+/* ═══════════════ 3D GEOMETRY SOURCE CONFIG ═══════════════ */
+/**
+ * Available city / region-specific 3D geometry repositories:
+ *   - Google Photorealistic 3D Tiles (global, free, photogrammetry)
+ *   - Cesium ion OSM Buildings        (global, free, extruded polygons)
+ *   - Cesium ion Vexcel 3D Cities   (select cities, commercial, high-detail mesh)
+ *   - Cesium ion Japan 3D Buildings (Japan only, free, CityGML-derived)
+ *   - National open-data portals    (e.g., UK Ordnance Survey, SwissTopo, NYC OpenData)
+ *
+ * For a general route-rehearsal app we keep the fallback chain below.
+ * To plug in a city-specific asset, replace createGooglePhotorealistic3DTileset()
+ * with Cesium.Cesium3DTileset.fromIonAssetId(YOUR_ASSET_ID).
+ */
+const CITY_GEOMETRY_ASSET_ID = null; // e.g., 96188 for NYC 3D Buildings via ion
+
+async function loadPrimaryTileset() {
+  if (CITY_GEOMETRY_ASSET_ID) {
+    const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(CITY_GEOMETRY_ASSET_ID);
+    return { tileset, source: "city-asset" };
+  }
+  const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+  return { tileset, source: "google-photorealistic" };
+}
+
 /* ═══════════════ INIT ═══════════════ */
 
 export async function initView(containerId, coords, hazards, cbs) {
@@ -120,9 +144,9 @@ export async function initView(containerId, coords, hazards, cbs) {
 
   try {
     if (hasIonToken) {
-      // ── TIER 1: Google Photorealistic 3D Tiles (Google Earth experience) ──
+      // ── TIER 1: Primary 3D geometry (Google Photorealistic or city-specific ion asset) ──
       try {
-        console.log("[CesiumView] Attempting Google Photorealistic 3D Tiles...");
+        console.log("[CesiumView] Attempting primary 3D tileset...");
 
         // Keep globe enabled so we can sample terrain heights for camera positioning
         viewer = new Cesium.Viewer(containerId, {
@@ -155,19 +179,19 @@ export async function initView(containerId, coords, hazards, cbs) {
         // Increase request throughput for Google's tile server
         Cesium.RequestScheduler.requestsByServer["tile.googleapis.com:443"] = 18;
 
-        const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+        const { tileset, source } = await loadPrimaryTileset();
         viewer.scene.primitives.add(tileset);
         // Hide globe base so tiles are fully visible; terrain provider still works for sampling
         if (viewer.scene.globe) viewer.scene.globe.show = false;
         hasPhotorealistic = true;
-        console.log("[CesiumView] ✅ Google Photorealistic 3D Tiles loaded!");
+        console.log(`[CesiumView] ✅ Primary 3D tileset loaded (${source})`);
       } catch (photoErr) {
-        console.warn("[CesiumView] Google 3D Tiles failed, trying OSM Buildings...", photoErr.message);
+        console.warn("[CesiumView] Primary tileset failed, trying OSM Buildings...", photoErr.message);
         // Clean up failed viewer
         if (viewer) { viewer.destroy(); viewer = null; }
 
         // ── TIER 2: OSM Buildings on satellite globe ──
-        viewer = createSatelliteViewer(containerId);
+        viewer = await createSatelliteViewer(containerId);
         try {
           const buildings = await Cesium.createOsmBuildingsAsync();
           viewer.scene.primitives.add(buildings);
@@ -179,7 +203,7 @@ export async function initView(containerId, coords, hazards, cbs) {
     } else {
       // ── TIER 3: Flat satellite globe (no token) ──
       console.log("[CesiumView] No Cesium ion token — using flat satellite imagery");
-      viewer = createSatelliteViewer(containerId);
+      viewer = await createSatelliteViewer(containerId);
     }
   } catch (e) {
     console.error("CesiumJS viewer creation failed:", e);
