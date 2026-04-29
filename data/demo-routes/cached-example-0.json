@@ -1,0 +1,808 @@
+{
+  "isCachedState": true,
+  "title": "CN Tower to Union Station",
+  "origin": {
+    "lat": 43.6425637,
+    "lng": -79.3870872,
+    "label": "CN Tower, 290, Bremner Boulevard"
+  },
+  "destination": {
+    "lat": 43.6447084,
+    "lng": -79.3801462,
+    "label": "Union Station, 140, Bay Street"
+  },
+  "routeCoords": [
+    [
+      -79.3870872,
+      43.6425637
+    ],
+    [
+      -79.386425,
+      43.641818
+    ],
+    [
+      -79.386402,
+      43.641829
+    ],
+    [
+      -79.386294,
+      43.641877
+    ],
+    [
+      -79.386194,
+      43.641919
+    ],
+    [
+      -79.38596,
+      43.641996
+    ],
+    [
+      -79.385551,
+      43.642089
+    ],
+    [
+      -79.385467,
+      43.642107
+    ],
+    [
+      -79.385363,
+      43.642129
+    ],
+    [
+      -79.385207,
+      43.642162
+    ],
+    [
+      -79.384887,
+      43.642218
+    ],
+    [
+      -79.384158,
+      43.642356
+    ],
+    [
+      -79.384004,
+      43.642387
+    ],
+    [
+      -79.383863,
+      43.642418
+    ],
+    [
+      -79.383347,
+      43.642527
+    ],
+    [
+      -79.38323,
+      43.642552
+    ],
+    [
+      -79.382788,
+      43.642646
+    ],
+    [
+      -79.382528,
+      43.642702
+    ],
+    [
+      -79.382209,
+      43.642771
+    ],
+    [
+      -79.381628,
+      43.642897
+    ],
+    [
+      -79.381486,
+      43.642925
+    ],
+    [
+      -79.381529,
+      43.643025
+    ],
+    [
+      -79.38171,
+      43.643495
+    ],
+    [
+      -79.381688,
+      43.643631
+    ],
+    [
+      -79.382086,
+      43.644602
+    ],
+    [
+      -79.382181,
+      43.644651
+    ],
+    [
+      -79.382261,
+      43.644829
+    ],
+    [
+      -79.382421,
+      43.645181
+    ],
+    [
+      -79.382468,
+      43.645235
+    ],
+    [
+      -79.382532,
+      43.645289
+    ],
+    [
+      -79.382312,
+      43.645325
+    ],
+    [
+      -79.382211,
+      43.645319
+    ],
+    [
+      -79.381841,
+      43.64539
+    ],
+    [
+      -79.381736,
+      43.645411
+    ],
+    [
+      -79.381333,
+      43.645499
+    ],
+    [
+      -79.380551,
+      43.645671
+    ],
+    [
+      -79.3801462,
+      43.6447084
+    ]
+  ],
+  "routeSteps": [
+    {
+      "intersections": [
+        {
+          "out": 0,
+          "entry": [
+            true
+          ],
+          "bearings": [
+            57
+          ],
+          "location": [
+            -79.386425,
+            43.641818
+          ]
+        },
+        {
+          "lanes": [
+            {
+              "valid": false,
+              "indications": [
+                "left"
+              ]
+            },
+            {
+              "valid": true,
+              "indications": [
+                "none"
+              ]
+            },
+            {
+              "valid": true,
+              "indications": [
+                "none"
+              ]
+            }
+          ],
+          "out": 0,
+          "in": 2,
+          "entry": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "bearings": [
+            75,
+            165,
+            255,
+            345
+          ],
+          "location": [
+            -79.384004,
+            43.642387
+          ]
+        },
+        {
+          "out": 0,
+          "in": 2,
+          "entry": [
+            true,
+            true,
+            false
+          ],
+          "bearings": [
+            75,
+            165,
+            255
+          ],
+          "location": [
+            -79.382788,
+            43.642646
+          ]
+        }
+      ],
+      "driving_side": "right",
+      "geometry": {
+        "coordinates": [
+          [
+            -79.386425,
+            43.641818
+          ],
+          [
+            -79.386402,
+            43.641829
+          ],
+          [
+            -79.386294,
+            43.641877
+          ],
+          [
+            -79.386194,
+            43.641919
+          ],
+          [
+            -79.38596,
+            43.641996
+          ],
+          [
+            -79.385551,
+            43.642089
+          ],
+          [
+            -79.385467,
+            43.642107
+          ],
+          [
+            -79.385363,
+            43.642129
+          ],
+          [
+            -79.385207,
+            43.642162
+          ],
+          [
+            -79.384887,
+            43.642218
+          ],
+          [
+            -79.384158,
+            43.642356
+          ],
+          [
+            -79.384004,
+            43.642387
+          ],
+          [
+            -79.383863,
+            43.642418
+          ],
+          [
+            -79.383347,
+            43.642527
+          ],
+          [
+            -79.38323,
+            43.642552
+          ],
+          [
+            -79.382788,
+            43.642646
+          ],
+          [
+            -79.382528,
+            43.642702
+          ],
+          [
+            -79.382209,
+            43.642771
+          ],
+          [
+            -79.381628,
+            43.642897
+          ],
+          [
+            -79.381486,
+            43.642925
+          ]
+        ],
+        "type": "LineString"
+      },
+      "maneuver": {
+        "bearing_after": 57,
+        "bearing_before": 0,
+        "location": [
+          -79.386425,
+          43.641818
+        ],
+        "modifier": "left",
+        "type": "depart"
+      },
+      "name": "Bremner Boulevard",
+      "mode": "driving",
+      "weight": 51.5,
+      "duration": 51.5,
+      "distance": 418.1
+    },
+    {
+      "intersections": [
+        {
+          "lanes": [
+            {
+              "valid": true,
+              "indications": [
+                "left"
+              ]
+            },
+            {
+              "valid": false,
+              "indications": [
+                "straight"
+              ]
+            },
+            {
+              "valid": false,
+              "indications": [
+                "right"
+              ]
+            }
+          ],
+          "out": 3,
+          "in": 2,
+          "entry": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "bearings": [
+            75,
+            165,
+            255,
+            345
+          ],
+          "location": [
+            -79.381486,
+            43.642925
+          ]
+        },
+        {
+          "out": 2,
+          "in": 0,
+          "entry": [
+            false,
+            true,
+            true
+          ],
+          "bearings": [
+            165,
+            255,
+            345
+          ],
+          "location": [
+            -79.382261,
+            43.644829
+          ]
+        }
+      ],
+      "driving_side": "right",
+      "geometry": {
+        "coordinates": [
+          [
+            -79.381486,
+            43.642925
+          ],
+          [
+            -79.381529,
+            43.643025
+          ],
+          [
+            -79.38171,
+            43.643495
+          ],
+          [
+            -79.381688,
+            43.643631
+          ],
+          [
+            -79.382086,
+            43.644602
+          ],
+          [
+            -79.382181,
+            43.644651
+          ],
+          [
+            -79.382261,
+            43.644829
+          ],
+          [
+            -79.382421,
+            43.645181
+          ],
+          [
+            -79.382468,
+            43.645235
+          ],
+          [
+            -79.382532,
+            43.645289
+          ]
+        ],
+        "type": "LineString"
+      },
+      "maneuver": {
+        "bearing_after": 343,
+        "bearing_before": 73,
+        "location": [
+          -79.381486,
+          43.642925
+        ],
+        "modifier": "left",
+        "type": "turn"
+      },
+      "name": "York Street",
+      "mode": "driving",
+      "weight": 36.2,
+      "duration": 36.2,
+      "distance": 280.1
+    },
+    {
+      "intersections": [
+        {
+          "lanes": [
+            {
+              "valid": false,
+              "indications": [
+                "slight left"
+              ]
+            },
+            {
+              "valid": false,
+              "indications": [
+                "straight",
+                "slight left"
+              ]
+            },
+            {
+              "valid": true,
+              "indications": [
+                "right"
+              ]
+            }
+          ],
+          "out": 1,
+          "in": 2,
+          "entry": [
+            true,
+            true,
+            false,
+            false,
+            true
+          ],
+          "bearings": [
+            0,
+            75,
+            165,
+            255,
+            300
+          ],
+          "location": [
+            -79.382532,
+            43.645289
+          ]
+        },
+        {
+          "out": 0,
+          "in": 1,
+          "entry": [
+            true,
+            false,
+            true
+          ],
+          "bearings": [
+            75,
+            255,
+            345
+          ],
+          "location": [
+            -79.381736,
+            43.645411
+          ]
+        },
+        {
+          "out": 0,
+          "in": 1,
+          "entry": [
+            true,
+            false,
+            true
+          ],
+          "bearings": [
+            75,
+            255,
+            345
+          ],
+          "location": [
+            -79.381333,
+            43.645499
+          ]
+        }
+      ],
+      "driving_side": "right",
+      "geometry": {
+        "coordinates": [
+          [
+            -79.382532,
+            43.645289
+          ],
+          [
+            -79.382312,
+            43.645325
+          ],
+          [
+            -79.382211,
+            43.645319
+          ],
+          [
+            -79.381841,
+            43.64539
+          ],
+          [
+            -79.381736,
+            43.645411
+          ],
+          [
+            -79.381333,
+            43.645499
+          ],
+          [
+            -79.380551,
+            43.645671
+          ]
+        ],
+        "type": "LineString"
+      },
+      "maneuver": {
+        "bearing_after": 75,
+        "bearing_before": 340,
+        "location": [
+          -79.382532,
+          43.645289
+        ],
+        "modifier": "right",
+        "type": "turn"
+      },
+      "name": "Front Street West",
+      "mode": "driving",
+      "weight": 18.6,
+      "duration": 18.6,
+      "distance": 166
+    },
+    {
+      "intersections": [
+        {
+          "in": 0,
+          "entry": [
+            true
+          ],
+          "bearings": [
+            253
+          ],
+          "location": [
+            -79.380551,
+            43.645671
+          ]
+        }
+      ],
+      "driving_side": "right",
+      "geometry": {
+        "coordinates": [
+          [
+            -79.380551,
+            43.645671
+          ],
+          [
+            -79.380551,
+            43.645671
+          ]
+        ],
+        "type": "LineString"
+      },
+      "maneuver": {
+        "bearing_after": 0,
+        "bearing_before": 73,
+        "location": [
+          -79.380551,
+          43.645671
+        ],
+        "modifier": "right",
+        "type": "arrive"
+      },
+      "name": "Front Street West",
+      "mode": "driving",
+      "weight": 0,
+      "duration": 0,
+      "distance": 0
+    }
+  ],
+  "routeDistance": 864.1,
+  "routeDuration": 106.3,
+  "hazards": [
+    {
+      "type": "lane_positioning",
+      "label": "Get in left lane early",
+      "severity": "medium",
+      "source": "geometry",
+      "lat": 43.641818,
+      "lng": -79.386425,
+      "stepIndex": 0,
+      "heading": 57,
+      "description": "You need to turn left in 418m onto York Street. Get into the left lane as soon as you enter Bremner Boulevard.",
+      "tip": "Move to the left lane immediately — the turn comes up fast and you won't have time to change lanes later.",
+      "road": "Bremner Boulevard",
+      "instruction": "",
+      "id": "hazard_0"
+    },
+    {
+      "type": "traffic_signal",
+      "label": "Traffic Light",
+      "severity": "low",
+      "lat": 43.6423865,
+      "lng": -79.3840038,
+      "distance": 0,
+      "description": "Traffic-controlled intersection ahead.",
+      "tip": "Watch for stale green lights and prepare to stop if yellow.",
+      "source": "overpass"
+    },
+    {
+      "type": "stop_sign",
+      "label": "Stop Sign",
+      "severity": "medium",
+      "lat": 43.642493,
+      "lng": -79.3827194,
+      "distance": 18,
+      "description": "Stop sign ahead — full stop required.",
+      "tip": "Come to a complete stop and check for cross traffic before proceeding.",
+      "source": "overpass"
+    },
+    {
+      "type": "lane_positioning",
+      "label": "Get in right lane early",
+      "severity": "medium",
+      "source": "geometry",
+      "lat": 43.642925,
+      "lng": -79.381486,
+      "stepIndex": 1,
+      "heading": 343,
+      "description": "You need to turn right in 280m onto Front Street West. Get into the right lane as soon as you enter York Street.",
+      "tip": "Move to the right lane immediately — the turn comes up fast and you won't have time to change lanes later.",
+      "road": "York Street",
+      "instruction": "",
+      "id": "hazard_1"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6436752,
+      "lng": -79.3815642,
+      "distance": 11,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6436576,
+      "lng": -79.3818998,
+      "distance": 17,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6446077,
+      "lng": -79.3817831,
+      "distance": 24,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "traffic_signal",
+      "label": "Traffic Light",
+      "severity": "low",
+      "lat": 43.6452892,
+      "lng": -79.3825323,
+      "distance": 0,
+      "description": "Traffic-controlled intersection ahead.",
+      "tip": "Watch for stale green lights and prepare to stop if yellow.",
+      "source": "overpass"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6451456,
+      "lng": -79.3821637,
+      "distance": 20,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6453835,
+      "lng": -79.3814351,
+      "distance": 15,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "sharp_turn",
+      "label": "Sharp turn",
+      "severity": "high",
+      "source": "geometry",
+      "angleDeg": 90,
+      "lat": 43.645671,
+      "lng": -79.380551,
+      "coordIndex": 35,
+      "heading": 163,
+      "description": "Sharp turn of 90° — requires attention and reduced speed.",
+      "tip": "Slow down before this turn and stay in the correct lane.",
+      "id": "hazard_2"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6446522,
+      "lng": -79.3800973,
+      "distance": 7,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    },
+    {
+      "type": "tunnel",
+      "label": "Tunnel",
+      "severity": "medium",
+      "lat": 43.6448041,
+      "lng": -79.3804408,
+      "distance": 26,
+      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
+      "source": "overpass"
+    }
+  ],
+  "hazardSummary": {
+    "total": 3,
+    "high": 1,
+    "medium": 2,
+    "low": 0
+  },
+  "geminiInsights": []
+}

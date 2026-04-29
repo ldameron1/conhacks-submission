@@ -53,15 +53,11 @@ function buildQuery(bbox) {
       node["highway"="traffic_signals"](${bbox});
       node["highway"="stop"](${bbox});
       node["highway"="give_way"](${bbox});
-      node["highway"="crossing"]["crossing"!="marked"](${bbox});
-      node["highway"="crossing"]["crossing:markings"="no"](${bbox});
       node["traffic_calming"](${bbox});
       node["hazard"](${bbox});
       way["traffic_calming"](${bbox});
       way["surface"~"gravel|unpaved|dirt|mud|sand|compacted"](${bbox});
       way["maxspeed"~"^[1-3][0-9]$"](${bbox});
-      node["railway"="level_crossing"](${bbox});
-      node["railway"="crossing"](${bbox});
       way["tunnel"="yes"](${bbox});
       way["tunnel"="building_passage"](${bbox});
     );
@@ -116,29 +112,6 @@ function parseElement(el, lat, lon, dist) {
     };
   }
 
-  if (tags.highway === "crossing") {
-    const uncontrolled =
-      tags.crossing === "uncontrolled" ||
-      tags.crossing === "unmarked" ||
-      tags["crossing:markings"] === "no" ||
-      !tags.crossing;
-    return {
-      type: "pedestrian_crossing",
-      label: uncontrolled ? "Unmarked Pedestrian Crossing" : "Pedestrian Crossing",
-      severity: uncontrolled ? "high" : "medium",
-      lat,
-      lng: lon,
-      distance: Math.round(dist),
-      description: uncontrolled
-        ? "Unmarked or uncontrolled pedestrian crossing — high risk for pedestrians."
-        : "Pedestrian crossing ahead.",
-      tip: uncontrolled
-        ? "Slow down and scan both sides of the road carefully."
-        : "Watch for pedestrians and be prepared to stop.",
-      source: "overpass",
-    };
-  }
-
   if (tags.traffic_calming) {
     return {
       type: "traffic_calming",
@@ -163,20 +136,6 @@ function parseElement(el, lat, lon, dist) {
       distance: Math.round(dist),
       description: `Reported hazard in OpenStreetMap: ${tags.hazard}`,
       tip: "Proceed with extreme caution in this area.",
-      source: "overpass",
-    };
-  }
-
-  if (tags.railway === "level_crossing" || tags.railway === "crossing") {
-    return {
-      type: "railway_crossing",
-      label: "Railway Crossing",
-      severity: "high",
-      lat,
-      lng: lon,
-      distance: Math.round(dist),
-      description: "Railway level crossing — trains have right of way.",
-      tip: "Look both ways, listen, and never stop on the tracks.",
       source: "overpass",
     };
   }

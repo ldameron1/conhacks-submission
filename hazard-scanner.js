@@ -55,7 +55,7 @@ function severityFromAngle(angle) {
  * @param {Array<[number,number]>} coords  GeoJSON coordinates [lng, lat]
  * @param {number} thresholdDeg  Minimum bearing change to flag (default 40).
  */
-export function detectSharpTurns(coords, thresholdDeg = 40) {
+export function detectSharpTurns(coords, thresholdDeg = 45) {
   const hazards = [];
   if (coords.length < 3) return hazards;
 
@@ -63,6 +63,11 @@ export function detectSharpTurns(coords, thresholdDeg = 40) {
     const [lng0, lat0] = coords[i - 1];
     const [lng1, lat1] = coords[i];
     const [lng2, lat2] = coords[i + 1];
+
+    // Filter out micro-jitter from raw GPS or routing snap points
+    if (haversine(lat0, lng0, lat1, lng1) < 15 || haversine(lat1, lng1, lat2, lng2) < 15) {
+      continue;
+    }
 
     const b1 = bearing(lat0, lng0, lat1, lng1);
     const b2 = bearing(lat1, lng1, lat2, lng2);

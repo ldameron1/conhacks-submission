@@ -78,17 +78,16 @@ function showScreen(name) {
   document.querySelectorAll(".screen").forEach((el) => {
     el.classList.toggle("active", el.id === `screen-${name}`);
   });
-  
+
   const pairBox = $("persistent-pair-box");
   if (pairBox) {
-    if (name === "report" || name === "practice") {
+    if ((name === "report" || name === "practice") && !phoneBridge.isControllerConnected()) {
       pairBox.classList.remove("hidden");
     } else {
       pairBox.classList.add("hidden");
     }
   }
 }
-
 /* ═══════════════════ GEOCODING ═══════════════════ */
 async function geocode(address) {
   const url = `${CONFIG.NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=json&limit=1`;
@@ -112,8 +111,21 @@ async function fetchRoute(origin, dest) {
   if (data.code !== "Ok" || !data.routes.length)
     throw new Error("Could not compute route");
   const route = data.routes[0];
+  
+  // Ensure the route strictly follows from exact point A to point B
+  const coords = route.geometry.coordinates;
+  if (coords.length > 0) {
+    if (coords[0][0] !== origin.lng || coords[0][1] !== origin.lat) {
+      coords.unshift([origin.lng, origin.lat]);
+    }
+    const last = coords[coords.length - 1];
+    if (last[0] !== dest.lng || last[1] !== dest.lat) {
+      coords.push([dest.lng, dest.lat]);
+    }
+  }
+
   return {
-    coords: route.geometry.coordinates, // [[lng,lat],...]
+    coords: coords, // [[lng,lat],...]
     steps: route.legs[0].steps,
     distance: route.distance,
     duration: route.duration,
@@ -599,14 +611,13 @@ function updateStreetViewOverlay(containerId = "streetview-content") {
   const lng = h.lng;
 
   try {
-    // Google Maps Street View embed is free and does not require an API key
-    // Use loading="lazy" to prevent UI blocking
+    const heading = h.heading || 0;
+    const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${heading},0,0,0&output=svembed`;
     content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy"
-      src="https://www.google.com/maps/embed?pb=!4v0!6m8!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
+      src="${src}"
       style="border:0; width:100%; height:100%;"></iframe>`;
   } catch (e) {
     console.warn("Street View iframe update failed:", e);
-    // Fallback: show error message in container
     content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">Street View unavailable</div>`;
   }
 }
@@ -719,11 +730,18 @@ function nextHazard() {
         updateTriPaneMap();
       }
     } else if (currentPracticePass < 3) {
-      console.log("[nextHazard] Showing settings overlay");
-      // Disable button immediately to prevent double-clicks
+      console.log("[nextHazard] Transitioning directly to next pass");
+      // Disable button briefly to prevent double-clicks
       $("btn-next-hazard").disabled = true;
-      // On last hazard — show settings overlay before advancing
-      showSettingsOverlay();
+      
+      // Advance to next pass
+      state.practiceIndex = 0;
+      const nextPass = currentPracticePass + 1;
+      switchPass(nextPass);
+      renderPracticeInfo();
+      
+      // Re-enable button
+      setTimeout(() => { $("btn-next-hazard").disabled = false; }, 300);
     } else {
       console.log("[nextHazard] At end of hazards, no next action");
     }
@@ -826,8 +844,13 @@ function updateTriPaneStreetViewFromProgress(progress) {
 
   const content = $("tri-streetview-content");
   if (!content) return;
+
+  const dLng = c2[0] - c1[0];
+  const dLat = c2[1] - c1[1];
+  const heading = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+
   const iframe = content.querySelector("iframe");
-  const src = `https://www.google.com/maps/embed?pb=!4v0!6m8!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000`;
+  const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${Math.round(heading)},0,0,0&output=svembed`;
   if (iframe) {
     iframe.src = src;
   } else {
@@ -1248,13 +1271,12 @@ const EXAMPLES = [
 
 function renderExamples() {
   const container = $("example-routes");
-  EXAMPLES.forEach((ex) => {
+  EXAMPLES.forEach((ex, idx) => {
     const chip = document.createElement("button");
     chip.className = "example-chip";
     chip.textContent = `${ex.origin.split(",")[0]} → ${ex.dest.split(",")[0]}`;
     chip.addEventListener("click", () => {
-      $("input-origin").value = ex.origin;
-      $("input-dest").value = ex.dest;
+      loadDemoRoute(`data/demo-routes/cached-example-${idx}.json`);
     });
     container.appendChild(chip);
   });
@@ -1282,6 +1304,22 @@ async function loadDemoRoute(file) {
     const res = await fetch(file);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+
+    if (data.isCachedState) {
+      state.origin = data.origin;
+      state.destination = data.destination;
+      state.routeCoords = data.routeCoords;
+      state.routeSteps = data.routeSteps;
+      state.routeDistance = data.routeDistance;
+      state.routeDuration = data.routeDuration;
+      state.hazards = data.hazards;
+      state.hazardSummary = data.hazardSummary;
+      state.geminiInsights = data.geminiInsights;
+      state.excludedHazards = [];
+      showReport();
+      showToast(`Loaded demo route: ${data.title}`);
+      return;
+    }
 
     // Build continuous routeCoords from segment geometry
     const coords = [];
