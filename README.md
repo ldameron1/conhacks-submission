@@ -10,7 +10,7 @@ The demo should focus on one concrete failure mode: the user takes the wrong bra
 
 ## Proposal
 
-The full proposal and execution plan live in [PROPOSAL.md](/home/conhacks-user/conhacks-submission/PROPOSAL.md). It expands the concept into:
+The canonical proposal and execution plan live in [docs/PROPOSAL.md](/home/conhacks-user/conhacks-submission/docs/PROPOSAL.md). It expands the concept into:
 
 - product framing and target users
 - MVP and non-goals
@@ -22,9 +22,11 @@ The full proposal and execution plan live in [PROPOSAL.md](/home/conhacks-user/c
 
 ## Working Assets
 
-The repo now includes concrete MVP data assets:
+The repo now includes concrete MVP data assets and canonical docs:
 
-- [SCHEMA.md](/home/conhacks-user/conhacks-submission/SCHEMA.md): internal route, pain-point, and rehearsal-run schema
+- [docs/SCHEMA.md](/home/conhacks-user/conhacks-submission/docs/SCHEMA.md): internal route, pain-point, and rehearsal-run schema
+- [docs/HANDOFF.md](/home/conhacks-user/conhacks-submission/docs/HANDOFF.md): browser demo handoff and run instructions
+- [docs/IDEA_DECISION.md](/home/conhacks-user/conhacks-submission/docs/IDEA_DECISION.md): shortlist and sponsor decision
 - [data/demo-routes/downtown-garage.json](/home/conhacks-user/conhacks-submission/data/demo-routes/downtown-garage.json): wrong-exit and hidden-garage demo route
 - [data/demo-routes/airport-merge.json](/home/conhacks-user/conhacks-submission/data/demo-routes/airport-merge.json): merge-heavy airport demo route
 - [data/rehearsal-run.example.json](/home/conhacks-user/conhacks-submission/data/rehearsal-run.example.json): example rehearsal result payload
