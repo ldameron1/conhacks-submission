@@ -58,6 +58,7 @@ let activeAudio = null;
 let isRunning = false;
 let recognition = null;
 let userSpokeCallback = null;
+let cameraStream = null;
 
 /* ═══════════════ INIT ═══════════════ */
 
@@ -71,6 +72,14 @@ export function onUserSpoke(cb) {
 }
 
 function startListening() {
+  // Request video stream solely to turn on the physical camera light
+  // to notify the user they are being actively listened to.
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => { cameraStream = stream; })
+      .catch(e => console.warn("Camera light activation failed:", e));
+  }
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
@@ -191,6 +200,10 @@ export function stop() {
   isRunning = false;
   if (recognition) {
     try { recognition.stop(); } catch(e) {}
+  }
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
   }
   scheduledTimeouts.forEach(clearTimeout);
   scheduledTimeouts = [];
