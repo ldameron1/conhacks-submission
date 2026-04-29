@@ -96,9 +96,19 @@ export async function initView(containerId, coords, hazards, cbs) {
   const hasIonToken = Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 10;
 
   try {
-    // ── Use plain satellite imagery to avoid IZ errors ──
-    console.log("[CesiumView] Using plain satellite imagery (3D buildings disabled due to compatibility)");
-    viewer = await createSatelliteViewer(containerId);
+    if (hasIonToken) {
+      try {
+        viewer = await createPhotorealisticViewer(containerId);
+        hasPhotorealistic = true;
+        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles");
+      } catch (err) {
+        console.warn("[CesiumView] Google 3D Tiles failed, falling back to satellite:", err.message);
+        viewer = await createSatelliteViewer(containerId);
+      }
+    } else {
+      console.log("[CesiumView] No Cesium ion token. Using satellite fallback.");
+      viewer = await createSatelliteViewer(containerId);
+    }
   } catch (e) {
     console.error("CesiumJS viewer creation failed:", e);
     throw new Error("WebGL not available — 3D view requires a GPU-enabled browser.");
@@ -222,6 +232,32 @@ async function createSatelliteViewer(containerId) {
 
   v.scene.globe.show = true;
   v.scene.globe.depthTestAgainstTerrain = true;
+  return v;
+}
+
+/**
+ * Creates a photorealistic 3D tiles viewer using Google Earth data via Cesium ion.
+ */
+async function createPhotorealisticViewer(containerId) {
+  const v = new Cesium.CesiumWidget(containerId, {
+    contextOptions: {
+      webgl: { 
+        preserveDrawingBuffer: true,
+        allowIfMajorPerformanceCaveat: true
+      },
+    },
+  });
+
+  try {
+    const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+    v.scene.primitives.add(tileset);
+  } catch (e) {
+    v.destroy();
+    throw e;
+  }
+
+  // Hide the globe since the 3D tiles cover it
+  v.scene.globe.show = false;
   return v;
 }
 

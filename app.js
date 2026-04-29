@@ -103,6 +103,15 @@ function showScreen(name) {
   document.querySelectorAll(".screen").forEach((el) => {
     el.classList.toggle("active", el.id === `screen-${name}`);
   });
+  
+  const pairBox = $("persistent-pair-box");
+  if (pairBox) {
+    if (name === "report" || name === "practice") {
+      pairBox.classList.remove("hidden");
+    } else {
+      pairBox.classList.add("hidden");
+    }
+  }
 }
 
 /* ═══════════════════ GEOCODING ═══════════════════ */
@@ -430,7 +439,7 @@ function scrollToHazard(i) {
 
 /* ═══════════════════ PRACTICE MODE ═══════════════════ */
 let cesiumInitialized = false;
-let currentPracticeMode = "overview";
+let currentPracticePass = 1;
 let alertTimeout = null;
 
 async function startPractice(index = 0) {
@@ -446,21 +455,14 @@ async function startPractice(index = 0) {
         onHazardApproach: onHazardApproach,
       });
       cesiumInitialized = true;
-      $("cesium-container").classList.remove("hidden");
-      const fallback = $("practice-2d-fallback");
-      if (fallback) fallback.classList.add("hidden");
     } catch (e) {
       console.warn("CesiumJS init failed, falling back to 2D:", e.message);
       render2DFallback();
-      return;
     }
   }
 
-  // Jump to the hazard in the 3D view
-  cesiumView.jumpToHazard(index);
-  // Always start in overview mode so user sees the 2D route context first,
-  // then manually switches to drive when ready
-  switchMode("overview");
+  // Always start on Pass 1 (Review)
+  switchPass(1);
 }
 
 function renderPracticeInfo() {
@@ -485,21 +487,115 @@ function renderPracticeInfo() {
   $("btn-next-hazard").disabled = state.practiceIndex >= state.hazards.length - 1;
 }
 
-function switchMode(mode) {
-  currentPracticeMode = mode;
-  cesiumView.setMode(mode);
+function switchPass(pass) {
+  currentPracticePass = pass;
 
   // Update toggle buttons
   document.querySelectorAll(".mode-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === mode);
+    btn.classList.toggle("active", parseInt(btn.dataset.pass) === pass);
   });
 
-  // Show/hide HUD
-  const hud = $("drive-hud");
-  if (mode === "drive" || mode === "pip") {
-    hud.classList.remove("hidden");
+  // Hide all containers initially
+  $("review-map-container").style.display = "none";
+  $("split-view-container").style.display = "none";
+  $("cesium-container").style.display = "none";
+  $("drive-hud").classList.add("hidden");
+  
+  if (pass === 1) {
+    // Pass 1: Review (2D Map only)
+    $("review-map-container").style.display = "block";
+    renderReviewPass();
+  } else if (pass === 2) {
+    // Pass 2: StreetView Split View
+    $("split-view-container").style.display = "flex";
+    renderStreetViewPass();
+  } else if (pass === 3) {
+    // Pass 3: Drive Sim
+    $("cesium-container").style.display = "block";
+    $("drive-hud").classList.remove("hidden");
+    if (cesiumInitialized) {
+      cesiumView.setMode("drive");
+      cesiumView.jumpToHazard(state.practiceIndex);
+    }
+    // Also update split view inside PIP if active
+    updateStreetViewOverlay();
+  }
+}
+
+function renderReviewPass() {
+  const h = state.hazards[state.practiceIndex];
+  if (!h) return;
+  if (!state.practiceMap) {
+    state.practiceMap = L.map("review-map-container").setView([h.lat, h.lng], 18);
+    L.tileLayer(CONFIG.DARK_TILES, { maxZoom: 19, attribution: "CartoDB" }).addTo(state.practiceMap);
+    
+    // Draw route
+    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.practiceMap);
   } else {
-    hud.classList.add("hidden");
+    state.practiceMap.flyTo([h.lat, h.lng], 18);
+  }
+  
+  // Clear previous markers
+  if (state.practiceMapMarkers) {
+    state.practiceMapMarkers.forEach(m => m.remove());
+  }
+  state.practiceMapMarkers = [];
+  
+  // Draw all hazard markers
+  state.hazards.forEach((hz, idx) => {
+    const isActive = idx === state.practiceIndex;
+    const marker = L.circleMarker([hz.lat, hz.lng], {
+      radius: isActive ? 12 : 6,
+      fillColor: isActive ? "#ff4466" : "#ffaa00",
+      fillOpacity: 0.9,
+      color: "#fff",
+      weight: 2
+    }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
+    state.practiceMapMarkers.push(marker);
+  });
+}
+
+function renderStreetViewPass() {
+  const h = state.hazards[state.practiceIndex];
+  if (!h) return;
+  
+  // Handle Map side
+  if (!state.splitMap) {
+    state.splitMap = L.map("minimap-container").setView([h.lat, h.lng], 18);
+    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.splitMap);
+    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.splitMap);
+  } else {
+    state.splitMap.invalidateSize();
+    state.splitMap.flyTo([h.lat, h.lng], 18);
+  }
+  
+  // Clear markers
+  if (state.splitMapMarkers) state.splitMapMarkers.forEach(m => m.remove());
+  state.splitMapMarkers = [];
+  
+  const marker = L.circleMarker([h.lat, h.lng], {
+    radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
+  }).addTo(state.splitMap);
+  state.splitMapMarkers.push(marker);
+  
+  updateStreetViewOverlay();
+}
+
+function updateStreetViewOverlay() {
+  const h = state.hazards[state.practiceIndex];
+  if (!h) return;
+  const content = $("streetview-content");
+  if (content && CONFIG.GOOGLE_MAPS_KEY) {
+    const lat = h.lat;
+    const lng = h.lng;
+    content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
+      src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
+      style="border:0; width:100%; height:100%;"></iframe>`;
+  } else if (content) {
+    content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#222;">
+      StreetView unavailable — no API key.</div>`;
   }
 }
 
@@ -592,11 +688,14 @@ function nextHazard() {
   if (state.practiceIndex < state.hazards.length - 1) {
     state.practiceIndex++;
     renderPracticeInfo();
-    if (cesiumInitialized) {
-      cesiumView.jumpToHazard(state.practiceIndex);
-    } else if (state.practiceMap) {
-      const h = state.hazards[state.practiceIndex];
-      state.practiceMap.flyTo([h.lat, h.lng], 18);
+    
+    if (currentPracticePass === 1) {
+      renderReviewPass();
+    } else if (currentPracticePass === 2) {
+      renderStreetViewPass();
+    } else if (currentPracticePass === 3) {
+      if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
+      updateStreetViewOverlay();
     }
   }
 }
@@ -605,11 +704,14 @@ function prevHazard() {
   if (state.practiceIndex > 0) {
     state.practiceIndex--;
     renderPracticeInfo();
-    if (cesiumInitialized) {
-      cesiumView.jumpToHazard(state.practiceIndex);
-    } else if (state.practiceMap) {
-      const h = state.hazards[state.practiceIndex];
-      state.practiceMap.flyTo([h.lat, h.lng], 18);
+    
+    if (currentPracticePass === 1) {
+      renderReviewPass();
+    } else if (currentPracticePass === 2) {
+      renderStreetViewPass();
+    } else if (currentPracticePass === 3) {
+      if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
+      updateStreetViewOverlay();
     }
   }
 }
@@ -1155,8 +1257,8 @@ function wireEvents() {
   // Mode toggle buttons
   document.querySelectorAll(".mode-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      if (state.screen === "practice" && cesiumInitialized) {
-        switchMode(btn.dataset.mode);
+      if (state.screen === "practice") {
+        switchPass(parseInt(btn.dataset.pass));
       }
     });
   });
@@ -1196,8 +1298,9 @@ function wireEvents() {
     if (state.screen === "practice" && e.key === "Escape") {
       stopAutoDrive();
       narration.stop();
-      cesiumView.destroy();
-      cesiumInitialized = false;
+      if (cesiumInitialized && currentPracticePass === 3) {
+        // Keep it loaded, just pause
+      }
       showScreen("report");
     }
     // Brake key

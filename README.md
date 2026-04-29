@@ -4,6 +4,12 @@
 
 RRR is a driver-confusion detection and rehearsal tool. It scans a route for pain points — ambiguous exits, lane splits, rapid merges, hidden entrances, confusing signage — then lets the driver practice those moments in a 3D/StreetView environment with a phone-as-steering-wheel controller, narrated by a driving-instructor voice.
 
+## Architecture Overview
+
+Route Rehearsal is a lightweight, zero-build-step vanilla web application built on native HTML5, CSS3, and ES Modules. It orchestrates a sophisticated, single-page driver rehearsal experience by combining Leaflet’s performant 2D mapping and ArcGIS satellite imagery with CesiumJS’s immersive Google Photorealistic 3D Tiles. The frontend relies heavily on modern CSS Grid and Flexbox for responsive layouts and utilizes the Device Orientation API to seamlessly transform the user's mobile phone into a responsive, tilt-to-steer driving controller.
+
+On the backend, a minimal Node.js server paired with the `ws` library and an `ngrok` HTTPS tunnel maintains real-time, low-latency WebSocket communication between the laptop simulation and the phone controller. The platform’s robust hazard detection pipeline fuses precise geometric turn data from OSRM, real-world infrastructure constraints from the Overpass API, and intelligent "soft-hazard" coaching insights from Google Gemini 2.0 Flash. Finally, ElevenLabs TTS dynamically pre-generates hyper-realistic driving instructor voice narration and background distractions, resulting in a cohesive, fully browser-native AI driving simulator.
+
 ---
 
 ## Tech Stack

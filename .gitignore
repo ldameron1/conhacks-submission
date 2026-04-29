@@ -4,4 +4,6 @@ node_modules/
 dist/
 build/
 coverage/
+tech-stack-details.md
+tech-stack-compressed.md
 

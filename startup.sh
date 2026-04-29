@@ -95,19 +95,17 @@ stop_port_processes() {
 while true; do
   echo ""
   echo "=== Route Rehearsal Startup Menu ==="
-  echo "1) Start local mode (laptop + same Wi-Fi phone)"
-  echo "2) Start public mode with ngrok (internet pairing)"
-  echo "3) Show server status"
-  echo "4) Stop process using port $PORT (aggressive)"
-  echo "5) Exit"
-  read -rp "Choose an option [1-5]: " choice
+  echo "1) Start public mode with ngrok (internet pairing)"
+  echo "2) Show server status"
+  echo "3) Stop process using port $PORT (aggressive)"
+  echo "4) Exit"
+  read -rp "Choose an option [1-4]: " choice
 
   case "$choice" in
-    1) start_local ;;
-    2) start_public ;;
-    3) show_status ;;
-    4) stop_port_processes ;;
-    5) echo "Goodbye."; exit 0 ;;
-    *) echo "Invalid option. Please choose 1-5." ;;
+    1) start_public ;;
+    2) show_status ;;
+    3) stop_port_processes ;;
+    4) echo "Goodbye."; exit 0 ;;
+    *) echo "Invalid option. Please choose 1-4." ;;
   esac
 done

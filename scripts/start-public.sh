@@ -43,7 +43,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Starting ngrok tunnel for http://localhost:$PORT ..."
-ngrok http --scheme=https "$PORT" >/tmp/route-rehearsal-ngrok.log 2>&1 &
+ngrok http "$PORT" >/tmp/route-rehearsal-ngrok.log 2>&1 &
 NGROK_PID="$!"
 echo "ngrok process started (pid: $NGROK_PID). Waiting for public URL..."
 echo "ngrok log: /tmp/route-rehearsal-ngrok.log"
