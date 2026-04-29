@@ -52,31 +52,6 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function toggleStreetView() {
-  const overlay = $("streetview-overlay");
-  if (!overlay) return;
-  const isHidden = overlay.classList.contains("hidden");
-  if (isHidden) {
-    overlay.classList.remove("hidden");
-    const content = $("streetview-content");
-    if (content) {
-      const h = state.hazards[state.practiceIndex];
-      if (h && CONFIG.GOOGLE_MAPS_KEY) {
-        const lat = h.lat;
-        const lng = h.lng;
-        content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
-          src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
-          style="border:0; width:100%; height:100%;"></iframe>`;
-      } else {
-        content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;">
-          StreetView unavailable — no API key or hazard position.</div>`;
-      }
-    }
-  } else {
-    overlay.classList.add("hidden");
-  }
-}
-
 function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -441,6 +416,7 @@ function scrollToHazard(i) {
 let cesiumInitialized = false;
 let currentPracticePass = 1;
 let alertTimeout = null;
+let lastStreetViewUpdate = 0;
 
 async function startPractice(index = 0) {
   state.practiceIndex = index;
@@ -471,100 +447,146 @@ function renderPracticeInfo() {
 
   // Buttons
   $("btn-prev-hazard").disabled = state.practiceIndex === 0;
-  $("btn-next-hazard").disabled = state.practiceIndex >= state.hazards.length - 1;
+  const isLastHazard = state.practiceIndex >= state.hazards.length - 1;
+  const hasNextPhase = currentPracticePass < 3;
+  if (isLastHazard && hasNextPhase) {
+    $("btn-next-hazard").disabled = false;
+    $("btn-next-hazard").textContent = "Next Phase →";
+    $("btn-next-hazard").classList.add("next-phase");
+  } else {
+    $("btn-next-hazard").disabled = isLastHazard;
+    $("btn-next-hazard").textContent = "Next →";
+    $("btn-next-hazard").classList.remove("next-phase");
+  }
 }
 
 function switchPass(pass) {
-  currentPracticePass = pass;
+  try {
+    currentPracticePass = pass;
 
-  // Update toggle buttons
-  document.querySelectorAll(".mode-btn").forEach(btn => {
-    btn.classList.toggle("active", parseInt(btn.dataset.pass) === pass);
-  });
+    // Update toggle buttons
+    document.querySelectorAll(".mode-btn").forEach(btn => {
+      btn.classList.toggle("active", parseInt(btn.dataset.pass) === pass);
+    });
 
-  // Hide all containers initially
-  $("review-map-container").style.display = "none";
-  $("split-view-container").style.display = "none";
-  $("cesium-container").style.display = "none";
-  $("drive-hud").classList.add("hidden");
-  const triPane = $("tri-pane-container");
-  if (triPane) triPane.style.display = "none";
-  const triCesium = $("tri-cesium-container");
-  if (triCesium) triCesium.style.display = "none";
+    // Hide all containers initially
+    $("review-map-container").style.display = "none";
+    $("split-view-container").style.display = "none";
+    $("cesium-container").style.display = "none";
+    $("drive-hud").classList.add("hidden");
+    const triPane = $("tri-pane-container");
+    if (triPane) triPane.style.display = "none";
+    const triCesium = $("tri-cesium-container");
+    if (triCesium) triCesium.style.display = "none";
 
-  if (pass === 1) {
-    // Pass 1: Review (2D Map only)
-    $("review-map-container").style.display = "block";
-    renderReviewPass();
-  } else if (pass === 2) {
-    // Pass 2: StreetView Split View
-    $("split-view-container").style.display = "flex";
-    renderStreetViewPass();
-  } else if (pass === 3) {
-    // Pass 3: Tri-pane — Map left, 3D middle, StreetView right
-    showTriPane();
+    if (pass === 1) {
+      // Pass 1: Review (2D Map only)
+      $("review-map-container").style.display = "block";
+      renderReviewPass();
+    } else if (pass === 2) {
+      // Pass 2: StreetView Split View
+      $("split-view-container").style.display = "flex";
+      renderStreetViewPass();
+    } else if (pass === 3) {
+      // Pass 3: Tri-pane — Map left, 3D middle, StreetView right
+      showTriPane().catch(e => {
+        console.error("Error showing tri-pane:", e);
+        showToast("Error loading 3D view");
+      });
+    }
+  } catch (e) {
+    console.error("Error switching pass:", e);
+    showToast("Error switching view mode");
   }
 }
 
 function renderReviewPass() {
   const h = state.hazards[state.practiceIndex];
   if (!h) return;
-  if (!state.practiceMap) {
-    state.practiceMap = L.map("review-map-container").setView([h.lat, h.lng], 18);
-    L.tileLayer(CONFIG.DARK_TILES, { maxZoom: 19, attribution: "CartoDB" }).addTo(state.practiceMap);
-    
-    // Draw route
-    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.practiceMap);
-  } else {
-    state.practiceMap.flyTo([h.lat, h.lng], 18);
+  try {
+    if (!state.practiceMap) {
+      state.practiceMap = L.map("review-map-container").setView([h.lat, h.lng], 18);
+      L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.practiceMap);
+
+      // Draw route
+      const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+      L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.practiceMap);
+    } else {
+      // Use setTimeout to defer flyTo and prevent blocking
+      setTimeout(() => {
+        try {
+          if (state.practiceMap) {
+            state.practiceMap.flyTo([h.lat, h.lng], 18);
+          }
+        } catch (e) {
+          console.warn("flyTo failed:", e);
+        }
+      }, 0);
+    }
+
+    // Clear previous markers
+    if (state.practiceMapMarkers) {
+      state.practiceMapMarkers.forEach(m => m.remove());
+    }
+    state.practiceMapMarkers = [];
+
+    // Draw all hazard markers
+    state.hazards.forEach((hz, idx) => {
+      const isActive = idx === state.practiceIndex;
+      const marker = L.circleMarker([hz.lat, hz.lng], {
+        radius: isActive ? 12 : 6,
+        fillColor: isActive ? "#ff4466" : "#ffaa00",
+        fillOpacity: 0.9,
+        color: "#fff",
+        weight: 2
+      }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
+      state.practiceMapMarkers.push(marker);
+    });
+  } catch (e) {
+    console.warn("Map render failed in Review pass:", e);
   }
-  
-  // Clear previous markers
-  if (state.practiceMapMarkers) {
-    state.practiceMapMarkers.forEach(m => m.remove());
-  }
-  state.practiceMapMarkers = [];
-  
-  // Draw all hazard markers
-  state.hazards.forEach((hz, idx) => {
-    const isActive = idx === state.practiceIndex;
-    const marker = L.circleMarker([hz.lat, hz.lng], {
-      radius: isActive ? 12 : 6,
-      fillColor: isActive ? "#ff4466" : "#ffaa00",
-      fillOpacity: 0.9,
-      color: "#fff",
-      weight: 2
-    }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
-    state.practiceMapMarkers.push(marker);
-  });
 }
 
 function renderStreetViewPass() {
   const h = state.hazards[state.practiceIndex];
   if (!h) return;
-  
-  // Handle Map side
-  if (!state.splitMap) {
-    state.splitMap = L.map("minimap-container").setView([h.lat, h.lng], 18);
-    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.splitMap);
-    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.splitMap);
-  } else {
-    state.splitMap.invalidateSize();
-    state.splitMap.flyTo([h.lat, h.lng], 18);
+
+  try {
+    // Handle Map side
+    if (!state.splitMap) {
+      state.splitMap = L.map("minimap-container").setView([h.lat, h.lng], 18);
+      L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.splitMap);
+      const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+      L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.splitMap);
+    } else {
+      state.splitMap.invalidateSize();
+      // Use setTimeout to defer flyTo and prevent blocking
+      setTimeout(() => {
+        try {
+          if (state.splitMap) {
+            state.splitMap.flyTo([h.lat, h.lng], 18);
+          }
+        } catch (e) {
+          console.warn("flyTo failed:", e);
+        }
+      }, 0);
+    }
+
+    // Clear markers
+    if (state.splitMapMarkers) state.splitMapMarkers.forEach(m => m.remove());
+    state.splitMapMarkers = [];
+
+    const marker = L.circleMarker([h.lat, h.lng], {
+      radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
+    }).addTo(state.splitMap);
+    state.splitMapMarkers.push(marker);
+  } catch (e) {
+    console.warn("Map render failed in Street View pass:", e);
   }
-  
-  // Clear markers
-  if (state.splitMapMarkers) state.splitMapMarkers.forEach(m => m.remove());
-  state.splitMapMarkers = [];
-  
-  const marker = L.circleMarker([h.lat, h.lng], {
-    radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
-  }).addTo(state.splitMap);
-  state.splitMapMarkers.push(marker);
-  
-  updateStreetViewOverlay();
+
+  // Update Street View iframe (with error handling inside)
+  // Defer to prevent blocking
+  setTimeout(() => updateStreetViewOverlay(), 0);
 }
 
 function updateStreetViewOverlay(containerId = "streetview-content") {
@@ -574,10 +596,18 @@ function updateStreetViewOverlay(containerId = "streetview-content") {
   if (!content) return;
   const lat = h.lat;
   const lng = h.lng;
-  // Google Maps Street View embed is free and does not require an API key
-  content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
-    src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
-    style="border:0; width:100%; height:100%;"></iframe>`;
+
+  try {
+    // Google Maps Street View embed is free and does not require an API key
+    // Use loading="lazy" to prevent UI blocking
+    content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy"
+      src="https://www.google.com/maps/embed?pb=!4v0!6m8!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
+      style="border:0; width:100%; height:100%;"></iframe>`;
+  } catch (e) {
+    console.warn("Street View iframe update failed:", e);
+    // Fallback: show error message in container
+    content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">Street View unavailable</div>`;
+  }
 }
 
 function updateHUD(data) {
@@ -663,76 +693,127 @@ function render2DFallback() {
 }
 
 function nextHazard() {
-  if (state.practiceIndex < state.hazards.length - 1) {
-    state.practiceIndex++;
-    renderPracticeInfo();
-    
-    if (currentPracticePass === 1) {
-      renderReviewPass();
-    } else if (currentPracticePass === 2) {
-      renderStreetViewPass();
-    } else if (currentPracticePass === 3) {
-      if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
-      updateStreetViewOverlay("tri-streetview-content");
-      updateTriPaneMap();
+  try {
+    if (state.practiceIndex < state.hazards.length - 1) {
+      state.practiceIndex++;
+      renderPracticeInfo();
+
+      if (currentPracticePass === 1) {
+        renderReviewPass();
+      } else if (currentPracticePass === 2) {
+        renderStreetViewPass();
+      } else if (currentPracticePass === 3) {
+        if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
+        updateStreetViewOverlay("tri-streetview-content");
+        updateTriPaneMap();
+      }
+    } else if (currentPracticePass < 3) {
+      // On last hazard — show settings overlay before advancing
+      showSettingsOverlay();
     }
+  } catch (e) {
+    console.error("Error in nextHazard:", e);
+    showToast("Error advancing to next hazard");
   }
 }
 
 function prevHazard() {
-  if (state.practiceIndex > 0) {
-    state.practiceIndex--;
-    renderPracticeInfo();
+  try {
+    if (state.practiceIndex > 0) {
+      state.practiceIndex--;
+      renderPracticeInfo();
 
-    if (currentPracticePass === 1) {
-      renderReviewPass();
-    } else if (currentPracticePass === 2) {
-      renderStreetViewPass();
-    } else if (currentPracticePass === 3) {
-      if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
-      updateStreetViewOverlay("tri-streetview-content");
-      updateTriPaneMap();
+      if (currentPracticePass === 1) {
+        renderReviewPass();
+      } else if (currentPracticePass === 2) {
+        renderStreetViewPass();
+      } else if (currentPracticePass === 3) {
+        if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
+        updateStreetViewOverlay("tri-streetview-content");
+        updateTriPaneMap();
+      }
     }
+  } catch (e) {
+    console.error("Error in prevHazard:", e);
+    showToast("Error going to previous hazard");
   }
 }
 
 /* ═══════════════════ TRI-PANE (Pass 3) ═══════════════════ */
 async function showTriPane() {
-  const triPane = $("tri-pane-container");
-  if (!triPane) return;
-  triPane.style.display = "flex";
-  $("drive-hud").classList.remove("hidden");
+  try {
+    const triPane = $("tri-pane-container");
+    if (!triPane) return;
+    triPane.style.display = "flex";
+    $("drive-hud").classList.remove("hidden");
 
-  // Initialise Cesium on-demand if needed
-  if (!cesiumInitialized) {
-    try {
-      await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
-        onProgress: updateHUD,
-        onHazardApproach: onHazardApproach,
-      });
-      cesiumInitialized = true;
-    } catch (e) {
-      console.warn("CesiumJS init failed in tri-pane:", e.message);
-      // Render a 2D map directly inside the middle pane so the layout still works
-      const h = state.hazards[state.practiceIndex];
-      $("tri-cesium-container").innerHTML = `<div id="tri-fallback-map" style="width:100%; height:100%;"></div>`;
-      if (h) {
-        const map = L.map("tri-fallback-map").setView([h.lat, h.lng], 18);
-        L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(map);
-        const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-        L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(map);
-        L.circleMarker([h.lat, h.lng], { radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2 }).addTo(map);
+    // Initialise Cesium on-demand if needed
+    if (!cesiumInitialized) {
+      // Show loading indicator
+      const cesiumContainer = $("tri-cesium-container");
+      if (cesiumContainer) {
+        cesiumContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#00d4aa;">Loading 3D view...</div>`;
+      }
+
+      try {
+        await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
+          onProgress: updateHUD,
+          onHazardApproach: onHazardApproach,
+        });
+        cesiumInitialized = true;
+      } catch (e) {
+        console.warn("CesiumJS init failed in tri-pane:", e.message);
+        // Render a 2D map directly inside the middle pane so the layout still works
+        const h = state.hazards[state.practiceIndex];
+        $("tri-cesium-container").innerHTML = `<div id="tri-fallback-map" style="width:100%; height:100%;"></div>`;
+        if (h) {
+          const map = L.map("tri-fallback-map").setView([h.lat, h.lng], 18);
+          L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(map);
+          const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+          L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(map);
+          L.circleMarker([h.lat, h.lng], { radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2 }).addTo(map);
+        }
       }
     }
-  }
 
-  if (cesiumInitialized) {
-    cesiumView.setMode("drive");
-    cesiumView.jumpToHazard(state.practiceIndex);
-  }
+    if (cesiumInitialized) {
+      cesiumView.setMode("drive");
+      cesiumView.jumpToHazard(state.practiceIndex);
+    }
 
-  updateTriPaneMap();
-  updateStreetViewOverlay("tri-streetview-content");
+    // Defer map and Street View updates to prevent blocking
+    setTimeout(() => {
+      updateTriPaneMap();
+      updateStreetViewOverlay("tri-streetview-content");
+    }, 0);
+  } catch (e) {
+    console.error("Error in showTriPane:", e);
+    throw e; // Re-throw to be caught by switchPass
+  }
+}
+
+function updateTriPaneStreetViewFromProgress(progress) {
+  const now = Date.now();
+  if (now - lastStreetViewUpdate < 1200) return; // throttle to ~0.8 Hz to avoid iframe flicker
+  lastStreetViewUpdate = now;
+
+  const maxProgress = state.routeCoords.length - 1;
+  const idx = Math.floor(Math.max(0, Math.min(progress, maxProgress)));
+  const frac = Math.max(0, Math.min(progress, maxProgress)) - idx;
+  const c1 = state.routeCoords[idx] || state.routeCoords[maxProgress];
+  const c2 = state.routeCoords[idx + 1] || c1;
+  const lat = c1[1] + (c2[1] - c1[1]) * frac;
+  const lng = c1[0] + (c2[0] - c1[0]) * frac;
+
+  const content = $("tri-streetview-content");
+  if (!content) return;
+  const iframe = content.querySelector("iframe");
+  const src = `https://www.google.com/maps/embed?pb=!4v0!6m8!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000`;
+  if (iframe) {
+    iframe.src = src;
+  } else {
+    content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy" src="${src}" style="border:0; width:100%; height:100%;"></iframe>`;
+  }
 }
 
 function updateTriPaneMap() {
@@ -741,23 +822,36 @@ function updateTriPaneMap() {
   const container = $("tri-map-container");
   if (!container) return;
 
-  if (!state.triMap) {
-    state.triMap = L.map(container).setView([h.lat, h.lng], 18);
-    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.triMap);
-    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.triMap);
-  } else {
-    state.triMap.invalidateSize();
-    state.triMap.flyTo([h.lat, h.lng], 18);
+  try {
+    if (!state.triMap) {
+      state.triMap = L.map(container).setView([h.lat, h.lng], 18);
+      L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.triMap);
+      const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+      L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.triMap);
+    } else {
+      state.triMap.invalidateSize();
+      // Use setTimeout to defer flyTo and prevent blocking
+      setTimeout(() => {
+        try {
+          if (state.triMap) {
+            state.triMap.flyTo([h.lat, h.lng], 18);
+          }
+        } catch (e) {
+          console.warn("flyTo failed:", e);
+        }
+      }, 0);
+    }
+
+    if (state.triMapMarkers) state.triMapMarkers.forEach(m => m.remove());
+    state.triMapMarkers = [];
+
+    const marker = L.circleMarker([h.lat, h.lng], {
+      radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
+    }).addTo(state.triMap);
+    state.triMapMarkers.push(marker);
+  } catch (e) {
+    console.warn("Map render failed in Tri-pane:", e);
   }
-
-  if (state.triMapMarkers) state.triMapMarkers.forEach(m => m.remove());
-  state.triMapMarkers = [];
-
-  const marker = L.circleMarker([h.lat, h.lng], {
-    radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
-  }).addTo(state.triMap);
-  state.triMapMarkers.push(marker);
 }
 
 /* ═══════════════════ TOAST ═══════════════════ */
@@ -859,6 +953,7 @@ function startAutoDrive() {
 
       cesiumView.setProgress(progress + autoDriveSpeed);
       state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
+      updateTriPaneStreetViewFromProgress(progress);
     } else if (state.practiceMap && fallbackVehicle) {
       // 2D fallback: interpolate along routeCoords
       if (fallbackProgress >= maxProgress - 1) {
@@ -879,6 +974,7 @@ function startAutoDrive() {
       state.practiceMap.panTo([lat, lng]);
 
       state.rehearsal.routeCompletion = Math.round((fallbackProgress / maxProgress) * 100);
+      updateTriPaneStreetViewFromProgress(fallbackProgress);
     }
 
     // Update speed display
@@ -892,6 +988,7 @@ function stopAutoDrive() {
   autoDriving = false;
   clearInterval(autoDriveInterval);
   autoDriveInterval = null;
+  lastStreetViewUpdate = 0;
 
   // Pause distractions too
   distractions.stop();
@@ -1052,6 +1149,53 @@ function cycleDifficulty() {
   btn.textContent = DIFFICULTY_LABELS[next];
   
   showToast(`Difficulty: ${DIFFICULTY_LABELS[next]}`);
+}
+
+/* ═══════════════════ SETTINGS OVERLAY ═══════════════════ */
+function showSettingsOverlay() {
+  try {
+    const overlay = $("settings-overlay");
+    if (!overlay) return;
+    // Sync buttons with current difficulty
+    const current = distractions.getDifficulty();
+    document.querySelectorAll(".settings-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.difficulty === current);
+    });
+    overlay.classList.remove("hidden");
+  } catch (e) {
+    console.error("Error showing settings overlay:", e);
+    showToast("Error showing settings");
+  }
+}
+
+function hideSettingsOverlay() {
+  const overlay = $("settings-overlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
+function selectSettingsDifficulty(difficulty) {
+  if (!difficulty) return;
+  distractions.setDifficulty(difficulty);
+  document.querySelectorAll(".settings-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.difficulty === difficulty);
+  });
+  const btn = $("btn-difficulty");
+  if (btn) btn.textContent = DIFFICULTY_LABELS[difficulty];
+}
+
+function continueFromSettings() {
+  try {
+    hideSettingsOverlay();
+    // Advance from Phase 1 to Phase 2
+    if (currentPracticePass === 1) {
+      switchPass(2);
+    } else if (currentPracticePass === 2) {
+      switchPass(3);
+    }
+  } catch (e) {
+    console.error("Error continuing from settings:", e);
+    showToast("Error advancing to next phase");
+  }
 }
 
 /* ═══════════════════ EXAMPLE ROUTES ═══════════════════ */
@@ -1320,11 +1464,17 @@ function wireEvents() {
   $("btn-mute").addEventListener("click", toggleMute);
   $("btn-difficulty").addEventListener("click", cycleDifficulty);
   $("btn-finish").addEventListener("click", finishRehearsal);
-  $("btn-streetview-toggle").addEventListener("click", toggleStreetView);
 
   // Phone controller
   const btnPair = $("btn-pair-phone");
   if (btnPair) btnPair.addEventListener("click", togglePairPhone);
+
+  // Settings overlay
+  const btnSettingsContinue = $("btn-settings-continue");
+  if (btnSettingsContinue) btnSettingsContinue.addEventListener("click", continueFromSettings);
+  document.querySelectorAll(".settings-btn").forEach(btn => {
+    btn.addEventListener("click", () => selectSettingsDifficulty(btn.dataset.difficulty));
+  });
 
   // Recap buttons
   $("btn-retry").addEventListener("click", () => {

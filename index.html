@@ -1134,6 +1134,51 @@
       #btn-next-hazard { background: var(--gradient); border: none; color: #0a0e17; }
       #btn-prev-hazard:hover:not(:disabled) { background: var(--surface3); }
 
+      /* ═══════════ SETTINGS OVERLAY ═══════════ */
+      .settings-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 14, 23, 0.85);
+        backdrop-filter: blur(4px);
+        transition: opacity 0.3s;
+      }
+      .settings-overlay.hidden { opacity: 0; pointer-events: none; }
+      .settings-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 32px;
+        max-width: 480px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      }
+      .settings-title { margin: 0 0 8px; font-size: 22px; }
+      .settings-subtitle { margin: 0 0 24px; color: var(--text2); font-size: 14px; }
+      .settings-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+      .settings-btn {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--text);
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .settings-btn:hover { background: var(--surface3); }
+      .settings-btn.active { border-color: var(--accent); background: rgba(0,212,170,0.1); }
+      .settings-btn-icon { font-size: 20px; flex-shrink: 0; }
+      .settings-btn-label { font-weight: 700; font-size: 15px; }
+      .settings-btn-desc { margin-left: auto; font-size: 12px; color: var(--text3); }
+
       /* ═══════════ TOAST ═══════════ */
       #toast {
         position: fixed;
@@ -1414,7 +1459,6 @@
               <div class="hud-pill">🚗 <span class="val" id="hud-speed">--</span> km/h</div>
               <div class="hud-pill">Next hazard: <span class="val" id="hud-dist">--</span> m</div>
               <div class="hud-pill">Progress: <span class="val" id="hud-progress">0</span>%</div>
-              <button id="btn-streetview-toggle" class="btn-streetview-toggle" title="Toggle Split View">🏙 Split View</button>
               <button id="btn-mute" class="hud-btn" title="Toggle narration">🔊</button>
               <button id="btn-difficulty" class="hud-btn" title="Cycle difficulty">🟢 Calm</button>
               <div class="hud-pill" id="hud-signal-left">⬅ Signal</div>
@@ -1436,6 +1480,33 @@
             <div id="cesium-minimap-inner"></div>
           </div>
         </div>
+
+        <!-- Settings Overlay (appears between Pass 1 and Pass 2) -->
+        <div id="settings-overlay" class="settings-overlay hidden">
+          <div class="settings-card">
+            <h2 class="settings-title">⚙️ Driving Experience</h2>
+            <p class="settings-subtitle">Choose how intense your drive rehearsal will be.</p>
+            <div class="settings-options">
+              <button class="settings-btn" data-difficulty="calm">
+                <span class="settings-btn-icon">🟢</span>
+                <span class="settings-btn-label">Calm</span>
+                <span class="settings-btn-desc">Relaxed pace, fewer distractions</span>
+              </button>
+              <button class="settings-btn active" data-difficulty="moderate">
+                <span class="settings-btn-icon">🟡</span>
+                <span class="settings-btn-label">Moderate</span>
+                <span class="settings-btn-desc">Standard driving experience</span>
+              </button>
+              <button class="settings-btn" data-difficulty="intense">
+                <span class="settings-btn-icon">🔴</span>
+                <span class="settings-btn-label">Intense</span>
+                <span class="settings-btn-desc">High pace, frequent distractions</span>
+              </button>
+            </div>
+            <button id="btn-settings-continue" class="btn-primary">Continue to Pass 2 →</button>
+          </div>
+        </div>
+
         <div class="practice-info-panel">
           <div class="practice-info-main">
             <div id="practice-severity" class="practice-severity high">HIGH</div>

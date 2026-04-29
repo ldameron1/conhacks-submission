@@ -234,12 +234,13 @@ setInterval(() => {
 }, 60 * 1000);
 
 server.listen(PORT, () => {
-  const localhostUrl = `http://localhost:${PORT}`;
+  const boundPort = server.address().port;
+  const localhostUrl = `http://localhost:${boundPort}`;
   console.log(`Road Route Rehearsal server running on ${localhostUrl}`);
-  console.log(`WebSocket ready on ws://localhost:${PORT}`);
+  console.log(`WebSocket ready on ws://localhost:${boundPort}`);
   console.log(`Phone controller page (same device): ${localhostUrl}/controller.html`);
 
-  const lanUrls = getLanUrls(PORT);
+  const lanUrls = getLanUrls(boundPort);
   if (lanUrls.length) {
     console.log("Phone controller page (same Wi-Fi):");
     for (const url of lanUrls) {
@@ -249,5 +250,5 @@ server.listen(PORT, () => {
     console.log("No LAN IPv4 address detected. Use ngrok for remote phone pairing.");
   }
 
-  console.log("For internet pairing, run: ngrok http 8080");
+  console.log("For internet pairing, run: ngrok http ${boundPort}");
 });

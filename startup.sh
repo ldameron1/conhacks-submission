@@ -12,12 +12,30 @@ start_local() {
   echo ""
   if is_port_in_use; then
     echo "Port $PORT is already in use."
-    echo "Use option 4 to stop existing process first, or open http://localhost:$PORT directly."
+    echo "Open http://localhost:$PORT directly."
+    if command -v firefox >/dev/null 2>&1; then
+      firefox "http://localhost:$PORT" >/dev/null 2>&1 &
+    fi
     return
   fi
   echo "Starting local app on port $PORT..."
   cd "$ROOT_DIR"
-  npm start
+  node server.js >/tmp/route-rehearsal-server.log 2>&1 &
+  SERVER_PID="$!"
+  sleep 1
+  if ! is_port_in_use; then
+    echo "Server failed to start. Log: /tmp/route-rehearsal-server.log"
+    return
+  fi
+  echo "Server running at http://localhost:$PORT"
+  if command -v firefox >/dev/null 2>&1; then
+    firefox "http://localhost:$PORT" >/dev/null 2>&1 &
+    echo "Opened Firefox."
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "http://localhost:$PORT" >/dev/null 2>&1 &
+  fi
+  echo "Press Enter to return to menu (server keeps running)."
+  read -r
 }
 
 start_public() {
@@ -102,6 +120,7 @@ while true; do
   read -rp "Choose an option [1-4]: " choice
 
   case "$choice" in
+    0) start_local ;;
     1) start_public ;;
     2) show_status ;;
     3) stop_port_processes ;;
