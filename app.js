@@ -487,7 +487,7 @@ function render2DFallback() {
     container = document.createElement("div");
     container.id = "practice-2d-fallback";
     container.className = "practice-2d-fallback";
-    $("practice-view").appendChild(container);
+    document.querySelector(".practice-view-panel").appendChild(container);
   }
   container.classList.remove("hidden");
   container.innerHTML = `<div id="fallback-map" style="width:100%; height:100%;"></div>

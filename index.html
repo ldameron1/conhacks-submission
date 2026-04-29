@@ -468,6 +468,7 @@
       }
       .practice-body {
         display: flex;
+        flex-direction: column;
         flex: 1;
         min-height: 0;
       }
@@ -578,58 +579,23 @@
       .cesium-credit-logoContainer,
       .cesium-credit-expand-link { opacity: 0.3; font-size: 10px; }
 
-      /* ═══════════ MIRRORS & OVERLAYS ═══════════ */
-      .mirrors-container {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
+      /* ═══════════ MINI-MAP (modular position/shape) ═══════════ */
+      :root {
+        --minimap-width: 280px;
+        --minimap-height: 160px;
+        --minimap-bottom: 150px;
+        --minimap-radius: 8px;
       }
-      .mirror {
-        position: absolute;
-        background: #000;
-        border: 3px solid #333;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,1);
-        overflow: hidden;
-        pointer-events: auto;
-      }
-      .mirror::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
-        pointer-events: none;
-      }
-      .mirror.rearview {
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 320px;
-        height: 80px;
-        border-radius: 12px 12px 40px 40px;
-        border-bottom-width: 6px;
-      }
-      .mirror.sidemirror {
-        top: 40%;
-        width: 140px;
-        height: 220px;
-        border-radius: 100px 20px 20px 100px;
-      }
-      .mirror.sidemirror.left { left: 20px; }
-      .mirror.sidemirror.right { 
-        right: 20px; 
-        border-radius: 20px 100px 100px 20px;
-      }
-      
       .hud-minimap {
         position: absolute;
-        bottom: 120px;
+        bottom: var(--minimap-bottom);
         left: 50%;
         transform: translateX(-50%);
-        width: 180px;
-        height: 180px;
-        background: rgba(0,0,0,0.8);
+        width: var(--minimap-width);
+        height: var(--minimap-height);
+        background: rgba(0,0,0,0.85);
         border: 2px solid var(--accent);
-        border-radius: 50%;
+        border-radius: var(--minimap-radius);
         overflow: hidden;
         pointer-events: auto;
         box-shadow: 0 0 20px rgba(0,212,170,0.3);
@@ -961,62 +927,82 @@
         height: 100%;
       }
       .practice-info-panel {
-        width: 360px;
+        width: 100%;
+        height: 130px;
         flex-shrink: 0;
-        padding: 24px;
-        overflow-y: auto;
-        border-left: 1px solid var(--border);
+        padding: 12px 24px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-top: 1px solid var(--border);
         background: var(--bg2);
         display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 24px;
+      }
+      .practice-info-main {
+        display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 4px;
+        min-width: 0;
+      }
+      .practice-info-desc {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        justify-content: center;
       }
       .practice-severity {
         display: inline-block;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
-        padding: 4px 10px;
+        padding: 3px 8px;
         border-radius: 999px;
-        margin-bottom: 8px;
+        margin-bottom: 0;
+        width: fit-content;
       }
       .practice-severity.high { background: rgba(255,68,102,0.15); color: var(--danger); }
       .practice-severity.medium { background: rgba(255,170,0,0.15); color: var(--warning); }
       .practice-severity.low { background: rgba(0,212,170,0.15); color: var(--accent); }
-      #practice-label { font-size: 22px; font-weight: 800; line-height: 1.2; }
-      #practice-desc { font-size: 14px; color: var(--text2); line-height: 1.6; }
+      #practice-label { font-size: 16px; font-weight: 800; line-height: 1.2; white-space: nowrap; }
+      #practice-desc { font-size: 13px; color: var(--text2); line-height: 1.4; }
       .practice-tip-box {
         background: rgba(0,212,170,0.06);
         border: 1px solid rgba(0,212,170,0.15);
         border-radius: var(--radius);
-        padding: 14px;
+        padding: 8px 12px;
+        max-width: 400px;
       }
       .practice-tip-label {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         color: var(--accent);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
       }
-      #practice-tip { font-size: 13px; color: var(--text); line-height: 1.5; }
-      #practice-road { font-size: 13px; color: var(--text3); }
+      #practice-tip { font-size: 12px; color: var(--text); line-height: 1.4; }
+      #practice-road { font-size: 12px; color: var(--text3); }
       .practice-nav {
         display: flex;
         gap: 10px;
-        margin-top: auto;
-        padding-top: 16px;
-        border-top: 1px solid var(--border);
+        margin-left: auto;
+        padding-left: 16px;
+        border-left: 1px solid var(--border);
+        flex-shrink: 0;
       }
       .practice-nav button {
-        flex: 1;
-        padding: 12px;
+        padding: 8px 16px;
         border-radius: var(--radius-sm);
         font-weight: 700;
-        font-size: 14px;
+        font-size: 13px;
         font-family: var(--font);
         cursor: pointer;
         transition: background 0.15s, opacity 0.15s;
+        white-space: nowrap;
       }
       .practice-nav button:disabled { opacity: 0.3; cursor: default; }
       #btn-prev-hazard { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
@@ -1052,8 +1038,7 @@
         .report-body { flex-direction: column; }
         .report-list-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 50vh; }
         .report-map-panel { min-height: 300px; }
-        .practice-body { flex-direction: column; }
-        .practice-info-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
+        .practice-info-panel { height: auto; min-height: 100px; }
         .practice-view-panel { min-height: 300px; }
         .report-stats { gap: 12px; }
         .report-top { padding: 12px 16px; }
@@ -1185,13 +1170,6 @@
               <button id="btn-difficulty" class="hud-btn" title="Cycle difficulty">🟢 Calm</button>
             </div>
             
-            <!-- Mirrors -->
-            <div class="mirrors-container">
-              <div id="mirror-rear" class="mirror rearview"></div>
-              <div id="mirror-left" class="mirror sidemirror left"></div>
-              <div id="mirror-right" class="mirror sidemirror right"></div>
-            </div>
-
             <!-- MiniMap -->
             <div id="hud-minimap" class="hud-minimap">
               <div id="minimap-container" style="width:100%; height:100%;"></div>
@@ -1220,16 +1198,18 @@
           </div>
         </div>
         <div class="practice-info-panel">
-          <div>
+          <div class="practice-info-main">
             <div id="practice-severity" class="practice-severity high">HIGH</div>
             <h2 id="practice-label">Hazard Name</h2>
           </div>
-          <p id="practice-desc">Hazard description goes here.</p>
+          <div class="practice-info-desc">
+            <p id="practice-desc">Hazard description goes here.</p>
+            <p id="practice-road"></p>
+          </div>
           <div class="practice-tip-box">
             <div class="practice-tip-label">💡 What to Watch For</div>
             <p id="practice-tip">Driving tip goes here.</p>
           </div>
-          <p id="practice-road"></p>
           <div class="practice-nav">
             <button id="btn-prev-hazard">← Previous</button>
             <button id="btn-next-hazard">Next →</button>
