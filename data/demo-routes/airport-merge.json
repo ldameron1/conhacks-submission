@@ -1,0 +1,222 @@
+{
+  "id": "route_airport_merge_001",
+  "title": "Airport Merge Demo",
+  "origin": {
+    "label": "North Service Road",
+    "lat": 43.7021,
+    "lng": -79.6012
+  },
+  "destination": {
+    "label": "Terminal 1 Departures",
+    "lat": 43.6777,
+    "lng": -79.6248
+  },
+  "mode": "drive",
+  "estimatedDurationSec": 1020,
+  "estimatedDistanceM": 10100,
+  "provider": {
+    "source": "mock",
+    "externalRouteId": null
+  },
+  "segments": [
+    {
+      "id": "seg_a01_depart",
+      "sequence": 1,
+      "kind": "straight",
+      "instruction": "Head west on North Service Road.",
+      "distanceM": 1200,
+      "durationSec": 110,
+      "geometry": {
+        "start": { "lat": 43.7021, "lng": -79.6012 },
+        "end": { "lat": 43.7018, "lng": -79.6112 }
+      },
+      "roadContext": {
+        "roadName": "North Service Road",
+        "laneCount": 3,
+        "recommendedLane": "center",
+        "speedLimitKph": 50
+      },
+      "signage": {
+        "primaryText": "Airport / Departures",
+        "secondaryText": null,
+        "signageConfidence": "high"
+      },
+      "landmarks": [
+        "blue airport icons"
+      ],
+      "hazards": []
+    },
+    {
+      "id": "seg_a02_ramp_prepare",
+      "sequence": 2,
+      "kind": "prepare",
+      "instruction": "Move left for the airport connector ramp.",
+      "distanceM": 400,
+      "durationSec": 30,
+      "geometry": {
+        "start": { "lat": 43.7018, "lng": -79.6112 },
+        "end": { "lat": 43.7009, "lng": -79.6144 }
+      },
+      "roadContext": {
+        "roadName": "North Service Road",
+        "laneCount": 4,
+        "recommendedLane": "left-center",
+        "speedLimitKph": 50
+      },
+      "signage": {
+        "primaryText": "Airport Connector",
+        "secondaryText": "Left lanes",
+        "signageConfidence": "high"
+      },
+      "landmarks": [
+        "fuel station"
+      ],
+      "hazards": [
+        "late lane changes"
+      ]
+    },
+    {
+      "id": "seg_a03_split_merge",
+      "sequence": 3,
+      "kind": "merge",
+      "instruction": "Follow Terminal 1 Departures and merge away from Arrivals traffic.",
+      "distanceM": 650,
+      "durationSec": 42,
+      "geometry": {
+        "start": { "lat": 43.7009, "lng": -79.6144 },
+        "end": { "lat": 43.6968, "lng": -79.6191 }
+      },
+      "roadContext": {
+        "roadName": "Airport Connector",
+        "laneCount": 3,
+        "recommendedLane": "left",
+        "speedLimitKph": 60
+      },
+      "signage": {
+        "primaryText": "Terminal 1 Departures",
+        "secondaryText": "Arrivals traffic keeps right",
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "overhead terminal sign cluster"
+      ],
+      "hazards": [
+        "closely spaced merge",
+        "competing terminal signs"
+      ]
+    },
+    {
+      "id": "seg_a04_departures_upper",
+      "sequence": 4,
+      "kind": "decision",
+      "instruction": "Stay left to remain on the upper departures deck.",
+      "distanceM": 500,
+      "durationSec": 36,
+      "geometry": {
+        "start": { "lat": 43.6968, "lng": -79.6191 },
+        "end": { "lat": 43.6894, "lng": -79.6228 }
+      },
+      "roadContext": {
+        "roadName": "Terminal Access Road",
+        "laneCount": 3,
+        "recommendedLane": "left",
+        "speedLimitKph": 40
+      },
+      "signage": {
+        "primaryText": "Departures",
+        "secondaryText": "Upper level",
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "spiral ramp wall"
+      ],
+      "hazards": [
+        "arrivals/departures split"
+      ]
+    },
+    {
+      "id": "seg_a05_terminal_dropoff",
+      "sequence": 5,
+      "kind": "arrival",
+      "instruction": "Use the second curb lane for Terminal 1 drop-off.",
+      "distanceM": 300,
+      "durationSec": 24,
+      "geometry": {
+        "start": { "lat": 43.6894, "lng": -79.6228 },
+        "end": { "lat": 43.6777, "lng": -79.6248 }
+      },
+      "roadContext": {
+        "roadName": "Terminal 1 Departures",
+        "laneCount": 4,
+        "recommendedLane": "second-right",
+        "speedLimitKph": 20
+      },
+      "signage": {
+        "primaryText": "Air Canada / Terminal 1",
+        "secondaryText": null,
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "glass canopy"
+      ],
+      "hazards": [
+        "crowded curb lanes"
+      ]
+    }
+  ],
+  "painPoints": [
+    {
+      "id": "pp_terminal_merge",
+      "segmentId": "seg_a03_split_merge",
+      "type": "late_merge",
+      "severity": "high",
+      "confidence": 0.88,
+      "source": "predicted",
+      "title": "Terminal split merge",
+      "description": "Drivers hesitate when Arrivals and Departures signs appear together during a short merge.",
+      "rehearsalFocus": "Commit to Terminal 1 Departures early and keep left through the merge.",
+      "tags": [
+        "airport",
+        "merge",
+        "sign_cluster"
+      ],
+      "detectionSignals": {
+        "rerouteObserved": false,
+        "hesitationObserved": true,
+        "userReported": false
+      }
+    },
+    {
+      "id": "pp_departures_upper",
+      "segmentId": "seg_a04_departures_upper",
+      "type": "wrong_lane",
+      "severity": "medium",
+      "confidence": 0.79,
+      "source": "predicted",
+      "title": "Upper vs lower deck split",
+      "description": "The deck split happens quickly and the wrong lane sends the driver to arrivals.",
+      "rehearsalFocus": "Stay left before the deck split instead of reacting at the last second.",
+      "tags": [
+        "airport",
+        "deck_split",
+        "wrong_lane"
+      ],
+      "detectionSignals": {
+        "rerouteObserved": false,
+        "hesitationObserved": false,
+        "userReported": false
+      }
+    }
+  ],
+  "sceneCards": [
+    {
+      "id": "scene_airport_merge",
+      "segmentId": "seg_a03_split_merge",
+      "type": "mock_3d",
+      "title": "Terminal Merge Preview",
+      "assetKey": "airport-terminal-merge",
+      "cameraHint": "elevated-driver-seat",
+      "notes": "Emphasize left continuation for Departures and dim the Arrivals branch."
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "id": "run_2026_04_28_demo_001",
+  "routeId": "route_dt_parking_001",
+  "startedAt": "2026-04-28T23:00:00Z",
+  "endedAt": "2026-04-28T23:08:40Z",
+  "mode": "pain_point_only",
+  "selectedPainPointIds": [
+    "pp_exit_148_split"
+  ],
+  "events": [
+    {
+      "id": "evt_001",
+      "segmentId": "seg_004_exit_warning",
+      "timestampMs": 154000,
+      "eventType": "prompt_shown",
+      "result": "shown",
+      "inputMode": "gyro",
+      "details": {
+        "prompt": "Stay right-center for 148B"
+      }
+    },
+    {
+      "id": "evt_002",
+      "segmentId": "seg_005_exit_split",
+      "timestampMs": 186000,
+      "eventType": "decision_result",
+      "result": "miss",
+      "inputMode": "gyro",
+      "details": {
+        "expectedChoice": "148B",
+        "actualChoice": "148A",
+        "reactionMs": 2100
+      }
+    },
+    {
+      "id": "evt_003",
+      "segmentId": "seg_005_exit_split",
+      "timestampMs": 192000,
+      "eventType": "coach_feedback",
+      "result": "issued",
+      "inputMode": "system",
+      "details": {
+        "message": "You drifted toward 148A. Commit to the right-center lane earlier."
+      }
+    }
+  ],
+  "summary": {
+    "completed": true,
+    "mistakes": 1,
+    "hesitations": 2,
+    "confidenceScore": 0.68
+  }
+}

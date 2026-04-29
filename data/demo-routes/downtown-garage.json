@@ -1,0 +1,292 @@
+{
+  "id": "route_dt_parking_001",
+  "title": "Downtown Garage Demo",
+  "origin": {
+    "label": "Campus Parking Lot",
+    "lat": 43.6532,
+    "lng": -79.3832
+  },
+  "destination": {
+    "label": "King Street Garage",
+    "lat": 43.6498,
+    "lng": -79.3763
+  },
+  "mode": "drive",
+  "estimatedDurationSec": 780,
+  "estimatedDistanceM": 6200,
+  "provider": {
+    "source": "mock",
+    "externalRouteId": null
+  },
+  "segments": [
+    {
+      "id": "seg_001_depart",
+      "sequence": 1,
+      "kind": "straight",
+      "instruction": "Head east from campus and continue for 900 meters.",
+      "distanceM": 900,
+      "durationSec": 95,
+      "geometry": {
+        "start": { "lat": 43.6532, "lng": -79.3832 },
+        "end": { "lat": 43.6524, "lng": -79.3808 }
+      },
+      "roadContext": {
+        "roadName": "College Avenue",
+        "laneCount": 2,
+        "recommendedLane": "center",
+        "speedLimitKph": 50
+      },
+      "signage": {
+        "primaryText": "Downtown / Expressway East",
+        "secondaryText": null,
+        "signageConfidence": "high"
+      },
+      "landmarks": [
+        "brick underpass",
+        "gas station on the right"
+      ],
+      "hazards": []
+    },
+    {
+      "id": "seg_002_ramp_prepare",
+      "sequence": 2,
+      "kind": "prepare",
+      "instruction": "Move into the two right lanes to enter Expressway East.",
+      "distanceM": 350,
+      "durationSec": 28,
+      "geometry": {
+        "start": { "lat": 43.6524, "lng": -79.3808 },
+        "end": { "lat": 43.6518, "lng": -79.3798 }
+      },
+      "roadContext": {
+        "roadName": "College Avenue",
+        "laneCount": 4,
+        "recommendedLane": "right-center",
+        "speedLimitKph": 50
+      },
+      "signage": {
+        "primaryText": "Expressway East",
+        "secondaryText": "Right two lanes",
+        "signageConfidence": "high"
+      },
+      "landmarks": [
+        "blue hospital sign"
+      ],
+      "hazards": [
+        "busy lane shift"
+      ]
+    },
+    {
+      "id": "seg_003_merge",
+      "sequence": 3,
+      "kind": "merge",
+      "instruction": "Merge onto Expressway East and keep to the right-center lane.",
+      "distanceM": 700,
+      "durationSec": 40,
+      "geometry": {
+        "start": { "lat": 43.6518, "lng": -79.3798 },
+        "end": { "lat": 43.6511, "lng": -79.3794 }
+      },
+      "roadContext": {
+        "roadName": "Expressway East",
+        "laneCount": 4,
+        "recommendedLane": "right-center",
+        "speedLimitKph": 70
+      },
+      "signage": {
+        "primaryText": "Downtown East",
+        "secondaryText": null,
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "merge barrier ending"
+      ],
+      "hazards": [
+        "short merge distance"
+      ]
+    },
+    {
+      "id": "seg_004_exit_warning",
+      "sequence": 4,
+      "kind": "prepare",
+      "instruction": "Stay right-center. Exit 148A and 148B split ahead.",
+      "distanceM": 500,
+      "durationSec": 24,
+      "geometry": {
+        "start": { "lat": 43.6511, "lng": -79.3794 },
+        "end": { "lat": 43.6503, "lng": -79.3781 }
+      },
+      "roadContext": {
+        "roadName": "Expressway East",
+        "laneCount": 4,
+        "recommendedLane": "right-center",
+        "speedLimitKph": 70
+      },
+      "signage": {
+        "primaryText": "Exit 148A / 148B",
+        "secondaryText": "Airport / Downtown East",
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "green overhead gantry"
+      ],
+      "hazards": [
+        "closely spaced decisions"
+      ]
+    },
+    {
+      "id": "seg_005_exit_split",
+      "sequence": 5,
+      "kind": "decision",
+      "instruction": "Keep right for Exit 148B toward Downtown East.",
+      "distanceM": 450,
+      "durationSec": 32,
+      "geometry": {
+        "start": { "lat": 43.6503, "lng": -79.3781 },
+        "end": { "lat": 43.6499, "lng": -79.3771 }
+      },
+      "roadContext": {
+        "roadName": "Expressway East",
+        "laneCount": 4,
+        "recommendedLane": "right-center",
+        "speedLimitKph": 70
+      },
+      "signage": {
+        "primaryText": "Exit 148B Downtown East",
+        "secondaryText": "148A Airport / 148B Downtown",
+        "signageConfidence": "medium"
+      },
+      "landmarks": [
+        "split ramp barrier",
+        "yellow advisory sign"
+      ],
+      "hazards": [
+        "short decision window",
+        "signage mismatch risk"
+      ]
+    },
+    {
+      "id": "seg_006_surface_turn",
+      "sequence": 6,
+      "kind": "decision",
+      "instruction": "At the first light, turn left onto King Street East.",
+      "distanceM": 300,
+      "durationSec": 38,
+      "geometry": {
+        "start": { "lat": 43.6499, "lng": -79.3771 },
+        "end": { "lat": 43.6494, "lng": -79.3767 }
+      },
+      "roadContext": {
+        "roadName": "Frontage Road",
+        "laneCount": 3,
+        "recommendedLane": "left",
+        "speedLimitKph": 40
+      },
+      "signage": {
+        "primaryText": "King Street East",
+        "secondaryText": null,
+        "signageConfidence": "high"
+      },
+      "landmarks": [
+        "glass office tower"
+      ],
+      "hazards": [
+        "left-turn queue"
+      ]
+    },
+    {
+      "id": "seg_007_garage_entry",
+      "sequence": 7,
+      "kind": "parking",
+      "instruction": "Slow down and use the narrow garage entrance on the right after the alley.",
+      "distanceM": 220,
+      "durationSec": 30,
+      "geometry": {
+        "start": { "lat": 43.6494, "lng": -79.3767 },
+        "end": { "lat": 43.6498, "lng": -79.3763 }
+      },
+      "roadContext": {
+        "roadName": "King Street East",
+        "laneCount": 2,
+        "recommendedLane": "right",
+        "speedLimitKph": 30
+      },
+      "signage": {
+        "primaryText": "P Garage",
+        "secondaryText": "Entrance after alley",
+        "signageConfidence": "low"
+      },
+      "landmarks": [
+        "red awning",
+        "service alley"
+      ],
+      "hazards": [
+        "hidden entrance"
+      ]
+    }
+  ],
+  "painPoints": [
+    {
+      "id": "pp_exit_148_split",
+      "segmentId": "seg_005_exit_split",
+      "type": "wrong_exit",
+      "severity": "high",
+      "confidence": 0.92,
+      "source": "manual_report",
+      "title": "Exit 148A vs 148B split",
+      "description": "Map presentation and overhead signage are easy to misread under time pressure.",
+      "rehearsalFocus": "Choose 148B while staying right-center before the split.",
+      "tags": [
+        "signage_mismatch",
+        "exit_split",
+        "short_reaction_window"
+      ],
+      "detectionSignals": {
+        "rerouteObserved": true,
+        "hesitationObserved": true,
+        "userReported": true
+      }
+    },
+    {
+      "id": "pp_garage_entry_hidden",
+      "segmentId": "seg_007_garage_entry",
+      "type": "hidden_entrance",
+      "severity": "medium",
+      "confidence": 0.84,
+      "source": "predicted",
+      "title": "Hidden garage entrance",
+      "description": "The garage opening appears after a narrow alley and is easy to pass.",
+      "rehearsalFocus": "Slow early and look for the right-side opening after the alley.",
+      "tags": [
+        "parking",
+        "low_visibility",
+        "arrival"
+      ],
+      "detectionSignals": {
+        "rerouteObserved": false,
+        "hesitationObserved": false,
+        "userReported": false
+      }
+    }
+  ],
+  "sceneCards": [
+    {
+      "id": "scene_exit_148",
+      "segmentId": "seg_005_exit_split",
+      "type": "mock_3d",
+      "title": "Exit Split Preview",
+      "assetKey": "exit-148-split",
+      "cameraHint": "driver-seat",
+      "notes": "Highlight the right branch and dim the wrong ramp."
+    },
+    {
+      "id": "scene_garage_entry",
+      "segmentId": "seg_007_garage_entry",
+      "type": "scene_card",
+      "title": "Garage Entrance Preview",
+      "assetKey": "garage-hidden-entry",
+      "cameraHint": "curbside-right",
+      "notes": "Show the alley first, then the garage opening immediately after."
+    }
+  ]
+}
