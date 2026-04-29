@@ -836,6 +836,7 @@ function wireEvents() {
   $("btn-mute").addEventListener("click", toggleMute);
   $("btn-difficulty").addEventListener("click", cycleDifficulty);
   $("btn-finish").addEventListener("click", finishRehearsal);
+  $("btn-streetview-toggle").addEventListener("click", toggleStreetView);
 
   // Phone controller
   const btnPair = $("btn-pair-phone");

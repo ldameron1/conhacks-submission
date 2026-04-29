@@ -73,3 +73,33 @@ npm start
 ```
 
 **Note to Next Agent**: Everything from the previous handoff is implemented and tested. Pick up from any of the "Potential next improvements" above, or move on to demo hardening.
+
+---
+
+## 📝 Addendum: Driving Awareness & UI Upgrade
+**Updated**: 2026-04-29T13:15:00Z  
+**Agent**: Antigravity
+
+### Changes Implemented:
+1.  **Multi-Viewport Mirror System**:
+    *   Integrated three secondary Cesium viewer instances as Rearview, Left Side, and Right Side mirrors.
+    *   Mirrors automatically track the vehicle's position with appropriate heading offsets (180° for rear, -90° for left, +90° for right).
+2.  **HUD MiniMap Overlay**:
+    *   Added a lightweight Leaflet-based circular minimap to the bottom-center of the HUD.
+    *   Features real-time position tracking and a rotating directional marker synced with vehicle heading.
+3.  **StreetView Reference Overlay**:
+    *   Implemented a toggleable StreetView window that calculates current lat/lng and orientation.
+    *   Supports interactive Google StreetView embed (with API key) or a deep-link fallback to Google Maps.
+4.  **Narration System Robustness**:
+    *   Added a **Native Speech Fallback** (Web Speech API) to `narration.js`.
+    *   If ElevenLabs credits are exhausted (402 Payment Required) or the API key is missing, the instructor voice will automatically switch to the browser's local voice.
+5.  **Critical GPU Fix**:
+    *   Identified that `unset GALLIUM_DRIVER` was defaulting to software `llvmpipe` rendering.
+    *   Explicitly set `GALLIUM_DRIVER=radeonsi` in `.bashrc` to force hardware acceleration on the user's AMD GPU.
+    *   Recommended Chrome launch flags: `--ignore-gpu-blocklist --enable-gpu-rasterization`.
+
+### Current State:
+The rehearsal platform is now a "full cockpit" experience with mirrors and spatial orientation tools. The system is stable even with high API usage due to the new voice fallbacks.
+
+**Next Agent**: The 3D views are heavy. If performance drops, consider downgrading the side mirrors to static satellite captures or reducing the mirror refresh rate in `cesium-view.js`.
+

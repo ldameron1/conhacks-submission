@@ -25,6 +25,10 @@ let loopId = null;
 let callbacks = {};
 let positionMarker = null;
 let hasPhotorealistic = false; // true if Google 3D Tiles loaded
+let mirrorViewers = { rear: null, left: null, right: null };
+let leafletMap = null;
+let leafletMarker = null;
+let leafletRoute = null;
 
 const MOVE_SPEED = 0.12;   // index units per frame
 const LOOK_SPEED = 2.5;    // degrees per frame
@@ -296,12 +300,17 @@ export function setMode(mode) {
   } else if (mode === "pip") {
     if (positionMarker) positionMarker.show = false;
     viewer.scene.screenSpaceCameraController.enableInputs = false;
-    updateDriveCamera();
     startLoop();
     initMiniMap();
   }
 
-  if (mode !== "pip") {
+  if (inDriveMode) {
+    initMirrors();
+  } else {
+    destroyMirrors();
+  }
+
+  if (mode !== "pip" && mode !== "drive") {
     destroyMiniMap();
   }
 }
@@ -350,72 +359,132 @@ function updateDriveCamera() {
   if (hasPhotorealistic && viewer.scene) {
     viewer.scene.requestRender();
   }
+
+  updateMirrors();
+}
+
+/* ═══════════════ MIRRORS ═══════════════ */
+
+async function initMirrors() {
+  const mirrorConfigs = [
+    { id: "mirror-rear", key: "rear", offset: 180 },
+    { id: "mirror-left", key: "left", offset: -90 },
+    { id: "mirror-right", key: "right", offset: 90 }
+  ];
+
+  for (const cfg of mirrorConfigs) {
+    if (mirrorViewers[cfg.key]) continue;
+    const el = document.getElementById(cfg.id);
+    if (!el) continue;
+
+    try {
+      const v = createSatelliteViewer(cfg.id);
+      v.scene.screenSpaceCameraController.enableInputs = false;
+      v.scene.backgroundColor = Cesium.Color.BLACK;
+      
+      // Draw route on mirror too
+      const routeHeight = hasPhotorealistic ? 12 : 3;
+      const positions = routeCoords.map(c => Cesium.Cartesian3.fromDegrees(c.lng, c.lat, routeHeight));
+      v.entities.add({
+        polyline: {
+          positions, width: 4,
+          material: Cesium.Color.fromCssColorString("#00d4aa"),
+          clampToGround: !hasPhotorealistic,
+        },
+      });
+
+      mirrorViewers[cfg.key] = { viewer: v, offset: cfg.offset };
+    } catch (e) {
+      console.warn(`[CesiumView] Failed to init mirror ${cfg.key}:`, e.message);
+    }
+  }
+}
+
+function updateMirrors() {
+  const pos = interpolatePos(routeProgress);
+  const baseHeading = getRouteHeading(routeProgress) + headingOffset;
+
+  for (const key in mirrorViewers) {
+    const m = mirrorViewers[key];
+    if (!m || !m.viewer) continue;
+
+    m.viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT),
+      orientation: {
+        heading: Cesium.Math.toRadians((baseHeading + m.offset + 360) % 360),
+        pitch: Cesium.Math.toRadians(-5),
+        roll: 0,
+      },
+    });
+    
+    if (m.viewer.scene) m.viewer.scene.requestRender();
+  }
+}
+
+function destroyMirrors() {
+  for (const key in mirrorViewers) {
+    if (mirrorViewers[key] && mirrorViewers[key].viewer) {
+      mirrorViewers[key].viewer.destroy();
+    }
+  }
+  mirrorViewers = { rear: null, left: null, right: null };
 }
 
 /* ═══════════════ MINI-MAP (PiP) ═══════════════ */
 
 function initMiniMap() {
-  const container = document.getElementById("cesium-minimap");
-  if (!container || miniViewer) return;
-  container.style.display = "block";
+  const container = document.getElementById("minimap-container");
+  if (!container || leafletMap) return;
 
-  const esriMiniProvider = new Cesium.UrlTemplateImageryProvider({
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    maximumLevel: 19,
+  // Use Leaflet for the HUD minimap instead of Cesium (much lighter)
+  leafletMap = L.map("minimap-container", {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: false,
+    touchZoom: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false
+  }).setView([routeCoords[0].lat, routeCoords[0].lng], 16);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(leafletMap);
+
+  // Draw route
+  const latLngs = routeCoords.map(c => [c.lat, c.lng]);
+  leafletRoute = L.polyline(latLngs, { color: "#00d4aa", weight: 3, opacity: 0.6 }).addTo(leafletMap);
+
+  // You marker
+  leafletMarker = L.divIcon({
+    className: "minimap-marker",
+    html: `<div style="width:12px; height:12px; background:#00d4aa; border:2px solid #fff; border-radius:50%; box-shadow:0 0 10px #00d4aa; transform: rotate(0deg);"><div style="width:2px; height:8px; background:#fff; position:absolute; top:-6px; left:5px;"></div></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6]
   });
-
-  miniViewer = new Cesium.Viewer("cesium-minimap-inner", {
-    animation: false,
-    baseLayerPicker: false,
-    fullscreenButton: false,
-    geocoder: false,
-    homeButton: false,
-    infoBox: false,
-    sceneModePicker: false,
-    selectionIndicator: false,
-    timeline: false,
-    navigationHelpButton: false,
-    scene3DOnly: true,
-    showRenderLoopErrors: false,
-    baseLayer: new Cesium.ImageryLayer(esriMiniProvider),
-  });
-
-  miniViewer.scene.globe.show = true;
-  miniViewer.scene.screenSpaceCameraController.enableInputs = false;
-
-  // Draw route on mini-map
-  const positions = routeCoords.map(c => Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 3));
-  miniViewer.entities.add({
-    polyline: {
-      positions, width: 4,
-      material: Cesium.Color.fromCssColorString("#00d4aa"),
-      clampToGround: true,
-    },
-  });
-
-  updateMiniMapCamera();
+  leafletMarker = L.marker([routeCoords[0].lat, routeCoords[0].lng], { icon: leafletMarker }).addTo(leafletMap);
 }
 
 function updateMiniMapCamera() {
-  if (!miniViewer) return;
+  if (!leafletMap) return;
   const pos = interpolatePos(routeProgress);
-  miniViewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 800),
-    orientation: {
-      heading: Cesium.Math.toRadians(getRouteHeading(routeProgress)),
-      pitch: Cesium.Math.toRadians(-60),
-      roll: 0,
-    },
-  });
+  const heading = getRouteHeading(routeProgress);
+
+  leafletMap.panTo([pos.lat, pos.lng], { animate: false });
+  if (leafletMarker) {
+    leafletMarker.setLatLng([pos.lat, pos.lng]);
+    const iconEl = leafletMarker.getElement()?.firstChild;
+    if (iconEl) {
+      iconEl.style.transform = `rotate(${heading}deg)`;
+    }
+  }
 }
 
 function destroyMiniMap() {
-  if (miniViewer) {
-    miniViewer.destroy();
-    miniViewer = null;
+  if (leafletMap) {
+    leafletMap.remove();
+    leafletMap = null;
+    leafletMarker = null;
+    leafletRoute = null;
   }
-  const container = document.getElementById("cesium-minimap");
-  if (container) container.style.display = "none";
 }
 
 /* ═══════════════ KEYBOARD INPUT ═══════════════ */
@@ -573,6 +642,10 @@ export function getProgress() {
 
 export function setHeadingOffset(val) {
   headingOffset = val;
+}
+
+export function getHeadingOffset() {
+  return headingOffset;
 }
 
 export function setBrake(active) {

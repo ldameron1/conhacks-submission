@@ -90,34 +90,46 @@ function buildNarrationText(hazard, index, total) {
 
 async function generateAudio(text, cacheKey) {
   if (audioCache.has(cacheKey)) return audioCache.get(cacheKey);
-  if (!apiKey) return null;
-
-  const response = await fetch(`${ELEVENLABS_API}/${VOICE_ID}`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      "Accept": "audio/mpeg",
-    },
-    body: JSON.stringify({
-      text: text,
-      model_id: MODEL_ID,
-      voice_settings: {
-        stability: 0.65,
-        similarity_boost: 0.7,
-        style: 0.3,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
+  if (!apiKey) {
+    return { type: "native", text };
   }
 
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  audioCache.set(cacheKey, url);
-  return url;
+  try {
+    const response = await fetch(`${ELEVENLABS_API}/${VOICE_ID}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: MODEL_ID,
+        voice_settings: {
+          stability: 0.65,
+          similarity_boost: 0.7,
+          style: 0.3,
+        },
+      }),
+    });
+
+    if (response.status === 402) {
+      console.warn("[Narration] ElevenLabs credits exhausted. Falling back to native speech.");
+      return { type: "native", text };
+    }
+
+    if (!response.ok) {
+      throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    audioCache.set(cacheKey, url);
+    return url;
+  } catch (e) {
+    console.warn("[Narration] ElevenLabs fetch failed:", e.message);
+    return { type: "native", text };
+  }
 }
 
 /* ═══════════════ PLAYBACK ═══════════════ */
@@ -126,24 +138,19 @@ async function generateAudio(text, cacheKey) {
  * Play narration for a specific hazard. Queues if something is already playing.
  */
 export async function playHazard(hazard, index, total) {
-  if (muted || !apiKey) return;
+  if (muted) return;
 
   const text = buildNarrationText(hazard, index, total);
 
   // Check cache first
-  let audioUrl = audioCache.get(index);
-  if (!audioUrl) {
-    try {
-      audioUrl = await generateAudio(text, index);
-    } catch (e) {
-      console.warn("[Narration] Live generation failed:", e.message);
-      return;
-    }
+  let audioData = audioCache.get(index);
+  if (!audioData) {
+    audioData = await generateAudio(text, index);
   }
 
-  if (!audioUrl) return;
+  if (!audioData) return;
 
-  queue.push(audioUrl);
+  queue.push(audioData);
   if (!isPlaying) {
     playNext();
   }
@@ -153,15 +160,11 @@ export async function playHazard(hazard, index, total) {
  * Play a custom text narration (e.g., "Rehearsal complete").
  */
 export async function playText(text) {
-  if (muted || !apiKey) return;
-  try {
-    const url = await generateAudio(text, `custom_${text.slice(0, 20)}`);
-    if (url) {
-      queue.push(url);
-      if (!isPlaying) playNext();
-    }
-  } catch (e) {
-    console.warn("[Narration] Custom text failed:", e.message);
+  if (muted) return;
+  const audioData = await generateAudio(text, `custom_${text.slice(0, 20)}`);
+  if (audioData) {
+    queue.push(audioData);
+    if (!isPlaying) playNext();
   }
 }
 
@@ -172,8 +175,27 @@ function playNext() {
   }
 
   isPlaying = true;
-  const url = queue.shift();
-  currentAudio = new Audio(url);
+  const data = queue.shift();
+
+  if (typeof data === "object" && data.type === "native") {
+    // Native fallback
+    const utter = new SpeechSynthesisUtterance(data.text);
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.onend = () => {
+      isPlaying = false;
+      playNext();
+    };
+    utter.onerror = () => {
+      isPlaying = false;
+      playNext();
+    };
+    window.speechSynthesis.speak(utter);
+    return;
+  }
+
+  // ElevenLabs playback
+  currentAudio = new Audio(data);
   currentAudio.volume = 0.85;
 
   currentAudio.addEventListener("ended", () => {
@@ -187,9 +209,9 @@ function playNext() {
   });
 
   currentAudio.play().catch(() => {
-    // Autoplay blocked — user needs to interact first
-    console.warn("[Narration] Autoplay blocked. Click anywhere to enable audio.");
+    console.warn("[Narration] Autoplay blocked.");
     isPlaying = false;
+    playNext();
   });
 }
 
