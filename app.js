@@ -1,9 +1,11 @@
 import { scanRoute } from "./hazard-scanner.js";
+import * as cesiumView from "./cesium-view.js";
 
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
   GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
-  GOOGLE_MAPS_KEY: "", // Not needed — satellite map + SV link is 100% free
+  GOOGLE_MAPS_KEY: "",
+  CESIUM_ION_TOKEN: "", // Free: sign up at cesium.com/ion/signup — enables 3D buildings
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
   NOMINATIM_URL: "https://nominatim.openstreetmap.org/search",
   DARK_TILES: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -317,13 +319,35 @@ function scrollToHazard(i) {
 }
 
 /* ═══════════════════ PRACTICE MODE ═══════════════════ */
-function startPractice(index = 0) {
+let cesiumInitialized = false;
+let currentPracticeMode = "overview";
+let alertTimeout = null;
+
+async function startPractice(index = 0) {
   state.practiceIndex = index;
   showScreen("practice");
-  renderPractice();
+  renderPracticeInfo();
+
+  if (!cesiumInitialized) {
+    try {
+      await cesiumView.initView("cesium-container", state.routeCoords, state.hazards, {
+        onProgress: updateHUD,
+        onHazardApproach: onHazardApproach,
+      });
+      cesiumInitialized = true;
+    } catch (e) {
+      console.error("CesiumJS init failed:", e);
+      showToast("3D view failed to load. Check your connection.");
+      return;
+    }
+  }
+
+  // Jump to the hazard in the 3D view
+  cesiumView.jumpToHazard(index);
+  switchMode("overview");
 }
 
-function renderPractice() {
+function renderPracticeInfo() {
   const h = state.hazards[state.practiceIndex];
   if (!h) return;
 
@@ -331,7 +355,7 @@ function renderPractice() {
   $("practice-counter").textContent = `Hazard ${state.practiceIndex + 1} of ${state.hazards.length}`;
   $("practice-progress-fill").style.width = `${((state.practiceIndex + 1) / state.hazards.length) * 100}%`;
 
-  // Info
+  // Info panel
   $("practice-label").textContent = h.label;
   $("practice-severity").textContent = h.severity;
   $("practice-severity").className = `practice-severity ${h.severity}`;
@@ -339,74 +363,60 @@ function renderPractice() {
   $("practice-tip").textContent = h.tip;
   $("practice-road").textContent = h.road || "";
 
-  // Street View or map
-  renderPracticeView(h);
-
   // Buttons
   $("btn-prev-hazard").disabled = state.practiceIndex === 0;
   $("btn-next-hazard").disabled = state.practiceIndex >= state.hazards.length - 1;
 }
 
-/** Build the Google Maps Street View URL for opening in a new tab. */
-function streetViewUrl(lat, lng, heading) {
-  // Format: @lat,lng,3a,FOVy,HEADINGh,PITCHt  (pitch 90 = level horizon)
-  return `https://www.google.com/maps/@${lat},${lng},3a,75y,${heading || 0}h,90t/data=!3m1!1e1`;
+function switchMode(mode) {
+  currentPracticeMode = mode;
+  cesiumView.setMode(mode);
+
+  // Update toggle buttons
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+
+  // Show/hide HUD
+  const hud = $("drive-hud");
+  if (mode === "drive" || mode === "pip") {
+    hud.classList.remove("hidden");
+  } else {
+    hud.classList.add("hidden");
+  }
 }
 
-function renderPracticeView(h) {
-  const container = $("practice-view");
-  const svUrl = streetViewUrl(h.lat, h.lng, h.heading);
+function updateHUD(data) {
+  $("hud-progress").textContent = Math.round(data.progress);
+  $("hud-dist").textContent = data.nextHazardDist < 9999 ? data.nextHazardDist : "--";
+}
 
-  // Always show satellite map with route overlay + Street View link
-  container.innerHTML = `<div id="practice-map-inner" class="practice-map-inner"></div>
-    <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
-      🔍 Open in Google Street View
-    </a>`;
+function onHazardApproach(hazard, index, dist) {
+  // Show alert banner
+  const alert = $("hud-alert");
+  alert.textContent = `⚠ ${hazard.label} — ${hazard.tip}`;
+  alert.classList.add("visible");
+  clearTimeout(alertTimeout);
+  alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
 
-  if (state.practiceMap) { state.practiceMap.remove(); state.practiceMap = null; }
-
-  requestAnimationFrame(() => {
-    state.practiceMap = L.map("practice-map-inner", { zoomControl: true }).setView([h.lat, h.lng], 17);
-    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.practiceMap);
-
-    // Draw route
-    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
-    L.polyline(latLngs, { color: "#00d4aa", weight: 4, opacity: 0.8 }).addTo(state.practiceMap);
-
-    // All hazard markers (dimmed)
-    state.hazards.forEach((hz, idx) => {
-      const isActive = idx === state.practiceIndex;
-      L.circleMarker([hz.lat, hz.lng], {
-        radius: isActive ? 14 : 8,
-        fillColor: isActive ? "#ff4466" : "#ffaa00",
-        fillOpacity: isActive ? 0.95 : 0.4,
-        color: "#fff",
-        weight: isActive ? 3 : 1,
-      }).addTo(state.practiceMap);
-    });
-
-    // Heading arrow for active hazard
-    const arrowLat = h.lat + 0.0004 * Math.cos((h.heading || 0) * Math.PI / 180);
-    const arrowLng = h.lng + 0.0004 * Math.sin((h.heading || 0) * Math.PI / 180);
-    L.polyline([[h.lat, h.lng], [arrowLat, arrowLng]], {
-      color: "#ffaa00", weight: 3, dashArray: "6 4",
-    }).addTo(state.practiceMap);
-
-    setTimeout(() => state.practiceMap?.invalidateSize(), 100);
-  });
+  // Update info panel to show this hazard
+  state.practiceIndex = index;
+  renderPracticeInfo();
 }
 
 function nextHazard() {
   if (state.practiceIndex < state.hazards.length - 1) {
     state.practiceIndex++;
-    renderPractice();
+    renderPracticeInfo();
+    cesiumView.jumpToHazard(state.practiceIndex);
   }
 }
 
 function prevHazard() {
   if (state.practiceIndex > 0) {
     state.practiceIndex--;
-    renderPractice();
+    renderPracticeInfo();
+    cesiumView.jumpToHazard(state.practiceIndex);
   }
 }
 
@@ -443,11 +453,28 @@ function renderExamples() {
 function wireEvents() {
   $("btn-scan").addEventListener("click", startScan);
   $("btn-back-input").addEventListener("click", () => showScreen("input"));
-  $("btn-back-report").addEventListener("click", () => showScreen("report"));
+  $("btn-back-report").addEventListener("click", () => {
+    cesiumView.destroy();
+    cesiumInitialized = false;
+    showScreen("report");
+  });
   $("btn-start-practice").addEventListener("click", () => startPractice(0));
   $("btn-prev-hazard").addEventListener("click", prevHazard);
   $("btn-next-hazard").addEventListener("click", nextHazard);
-  $("btn-new-route").addEventListener("click", () => showScreen("input"));
+  $("btn-new-route").addEventListener("click", () => {
+    cesiumView.destroy();
+    cesiumInitialized = false;
+    showScreen("input");
+  });
+
+  // Mode toggle buttons
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (state.screen === "practice" && cesiumInitialized) {
+        switchMode(btn.dataset.mode);
+      }
+    });
+  });
 
   // Enter key on inputs
   $("input-origin").addEventListener("keydown", (e) => {
@@ -457,12 +484,12 @@ function wireEvents() {
     if (e.key === "Enter") startScan();
   });
 
-  // Keyboard nav in practice mode
+  // Escape to go back
   document.addEventListener("keydown", (e) => {
-    if (state.screen === "practice") {
-      if (e.key === "ArrowRight") nextHazard();
-      if (e.key === "ArrowLeft") prevHazard();
-      if (e.key === "Escape") showScreen("report");
+    if (state.screen === "practice" && e.key === "Escape") {
+      cesiumView.destroy();
+      cesiumInitialized = false;
+      showScreen("report");
     }
   });
 }

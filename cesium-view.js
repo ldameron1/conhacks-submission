@@ -81,23 +81,29 @@ export async function initView(containerId, coords, hazards, cbs) {
   // Cleanup any previous viewer
   destroy();
 
-  // Create viewer without requiring Cesium ion token for base imagery
-  viewer = new Cesium.Viewer(containerId, {
-    animation: false,
-    baseLayerPicker: false,
-    fullscreenButton: false,
-    geocoder: false,
-    homeButton: false,
-    infoBox: false,
-    sceneModePicker: false,
-    selectionIndicator: false,
-    timeline: false,
-    navigationHelpButton: false,
-    scene3DOnly: true,
-    contextOptions: {
-      webgl: { preserveDrawingBuffer: true },
-    },
-  });
+  // Create viewer — suppress default error dialogs
+  try {
+    viewer = new Cesium.Viewer(containerId, {
+      animation: false,
+      baseLayerPicker: false,
+      fullscreenButton: false,
+      geocoder: false,
+      homeButton: false,
+      infoBox: false,
+      sceneModePicker: false,
+      selectionIndicator: false,
+      timeline: false,
+      navigationHelpButton: false,
+      scene3DOnly: true,
+      showRenderLoopErrors: false,
+      contextOptions: {
+        webgl: { preserveDrawingBuffer: true },
+      },
+    });
+  } catch (e) {
+    console.error("CesiumJS viewer creation failed:", e);
+    throw new Error("WebGL not available — 3D view requires a GPU-enabled browser.");
+  }
 
   // Dark atmosphere
   viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#0a0e1a");
