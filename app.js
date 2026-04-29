@@ -3,7 +3,7 @@ import { scanRoute } from "./hazard-scanner.js";
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
   GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
-  GOOGLE_MAPS_KEY: "", // Optional — set for inline Street View
+  GOOGLE_MAPS_KEY: "AIzaSyAx1p_zCdc8XkCDFK5-ZWmN-4I0NiTDMM4",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
   NOMINATIM_URL: "https://nominatim.openstreetmap.org/search",
   DARK_TILES: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -335,18 +335,28 @@ function renderPractice() {
   $("btn-next-hazard").disabled = state.practiceIndex >= state.hazards.length - 1;
 }
 
+/** Build the Google Maps Street View URL for opening in a new tab. */
+function streetViewUrl(lat, lng, heading) {
+  // Format: @lat,lng,3a,FOVy,HEADINGh,PITCHt  (pitch 90 = level horizon)
+  return `https://www.google.com/maps/@${lat},${lng},3a,75y,${heading || 0}h,90t/data=!3m1!1e1`;
+}
+
 function renderPracticeView(h) {
   const container = $("practice-view");
+  const svUrl = streetViewUrl(h.lat, h.lng, h.heading);
 
   if (CONFIG.GOOGLE_MAPS_KEY) {
-    // Inline Street View via Embed API
+    // Inline Street View via Embed API + link to open full screen
     container.innerHTML = `<iframe
       src="https://www.google.com/maps/embed/v1/streetview?key=${CONFIG.GOOGLE_MAPS_KEY}&location=${h.lat},${h.lng}&heading=${h.heading || 0}&pitch=0&fov=90"
-      class="streetview-frame" allowfullscreen loading="eager"></iframe>`;
+      class="streetview-frame" allowfullscreen loading="eager"></iframe>
+      <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
+        🔍 Open full Street View
+      </a>`;
   } else {
     // Fallback: satellite map + open-in-maps link
     container.innerHTML = `<div id="practice-map-inner" class="practice-map-inner"></div>
-      <a href="https://www.google.com/maps/@${h.lat},${h.lng},3a,75y,${h.heading || 0}h,90t" target="_blank" rel="noopener" class="streetview-link">
+      <a href="${svUrl}" target="_blank" rel="noopener" class="streetview-link">
         🔍 Open in Google Street View
       </a>`;
 
