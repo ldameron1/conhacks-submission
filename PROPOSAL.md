@@ -1,8 +1,8 @@
-# Route Rehearsal Proposal
+# Road Route Rehearsal Proposal
 
 ## Executive Summary
 
-Route Rehearsal is a web app that helps a driver practice an unfamiliar trip before they get in the car. A laptop or tablet shows the route as a sequence of driving decisions, while a phone acts as the steering controller. The system turns a route into a guided rehearsal with narration, timing cues, lane-change warnings, and a final confidence recap.
+Road Route Rehearsal is a web app that helps a driver practice an unfamiliar trip before they get in the car. A laptop or tablet shows the route as a sequence of driving decisions, while a phone acts as the steering controller. The system turns a route into a guided rehearsal with narration, timing cues, lane-change warnings, and a final confidence recap.
 
 The product pitch is simple: reduce stress before a difficult drive by letting the user mentally and physically rehearse key moments such as merges, exits, confusing intersections, toll booths, and parking entrances.
 
@@ -19,7 +19,7 @@ Navigation apps are good at turn-by-turn guidance while driving, but they are we
 - campus or airport drop-off paths
 - unfamiliar parking entrances
 
-Drivers often want a quick preview of where the confusing parts are before they begin. Route Rehearsal is built for that moment.
+Drivers often want a quick preview of where the confusing parts are before they begin. Road Route Rehearsal is built for that moment.
 
 ## Target Users
 
@@ -41,7 +41,7 @@ Drivers often want a quick preview of where the confusing parts are before they 
 ### User Flow
 
 1. User enters origin and destination or selects a demo route.
-2. System generates a route rehearsal timeline.
+2. System generates a road route rehearsal timeline.
 3. User pairs phone to the laptop with a short room code.
 4. Laptop displays upcoming route beats and simulated driving context.
 5. Phone acts as the steering input using gyro or touch.
@@ -83,7 +83,7 @@ The MVP should prove one clear idea: a route can be turned into a useful rehears
 
 ### Frontend
 
-- Laptop display: main route rehearsal screen
+- Laptop display: main road route rehearsal screen
 - Phone display: controller UI with gyro or touch steering
 - Shared session state synced in real time
 
@@ -167,7 +167,7 @@ Done when:
 
 #### Sprint 1: Rehearsal Core
 
-Goal: make the app feel like a real route rehearsal.
+Goal: make the app feel like a real road route rehearsal.
 
 - build route timeline UI
 - add steering or touch progression
@@ -242,7 +242,7 @@ Done when:
 
 ## Acceptance Criteria for MVP
 
-- Route Rehearsal can be explained and demonstrated in under two minutes
+- Road Route Rehearsal can be explained and demonstrated in under two minutes
 - Two devices can pair and share one session
 - One route can be rehearsed end to end
 - The system shows at least three kinds of route prompts:

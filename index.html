@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Route Rehearsal — Practice Before You Drive</title>
+    <title>Road Route Rehearsal — Practice Before You Drive</title>
     <meta name="description" content="Enter a route, scan for hazards, and practice navigating tricky spots in Street View before you drive." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -595,7 +595,11 @@
       #cesium-container .cesium-viewer,
       #cesium-container .cesium-viewer-cesiumWidgetContainer,
       #cesium-container .cesium-widget,
-      #cesium-container .cesium-widget canvas {
+      #cesium-container .cesium-widget canvas,
+      #tri-cesium-container .cesium-viewer,
+      #tri-cesium-container .cesium-viewer-cesiumWidgetContainer,
+      #tri-cesium-container .cesium-widget,
+      #tri-cesium-container .cesium-widget canvas {
         width: 100% !important;
         height: 100% !important;
       }
@@ -1005,6 +1009,31 @@
         z-index: 10;
       }
 
+      /* ═══════════ TRI-PANE (Pass 3) ═══════════ */
+      #tri-pane-container {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+      }
+      .tri-pane-section {
+        flex: 1;
+        height: 100%;
+        position: relative;
+        min-width: 0;
+      }
+      .tri-pane-middle {
+        flex: 1.5;
+      }
+      .tri-pane-divider {
+        width: 2px;
+        background: var(--border2);
+        cursor: col-resize;
+        z-index: 10;
+        flex-shrink: 0;
+      }
+
       /* ═══════════ MINI-MAP (PiP) ═══════════ */
       #cesium-minimap {
         position: absolute;
@@ -1238,7 +1267,7 @@
       <div class="input-card">
         <div class="brand">
           <div class="brand-mark">R</div>
-          <h1>Route Rehearsal</h1>
+          <h1>Road Route Rehearsal</h1>
         </div>
         <p class="input-subtitle">
           Enter a route to scan for sharp corners, confusing intersections, and tricky merges — then practice navigating them in Street View.
@@ -1361,7 +1390,22 @@
             </div>
           </div>
 
-          <!-- Pass 3: CesiumJS 3D Container -->
+          <!-- Pass 3: Tri-Pane Layout -->
+          <div id="tri-pane-container" style="display:none;">
+            <div class="tri-pane-section">
+              <div id="tri-map-container" style="width:100%; height:100%;"></div>
+            </div>
+            <div class="tri-pane-divider"></div>
+            <div class="tri-pane-section tri-pane-middle">
+              <div id="tri-cesium-container" style="width:100%; height:100%;"></div>
+            </div>
+            <div class="tri-pane-divider"></div>
+            <div class="tri-pane-section">
+              <div id="tri-streetview-content" style="width:100%; height:100%;"></div>
+            </div>
+          </div>
+
+          <!-- Pass 3: Legacy CesiumJS 3D Container (kept for backwards compat) -->
           <div id="cesium-container" style="display:none;"></div>
 
           <!-- Drive HUD overlay (Pass 3 only) -->

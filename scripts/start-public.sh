@@ -4,6 +4,14 @@ set -euo pipefail
 PORT="${PORT:-8080}"
 NGROK_API_URL="${NGROK_API_URL:-http://127.0.0.1:4040/api/tunnels}"
 
+# Load ngrok authtoken from .env safely (avoid expanding $ in other values)
+if [[ -f .env ]]; then
+  NGROK_AUTH_TOKEN="$(grep '^NGROK_AUTH_TOKEN=' .env | sed 's/^NGROK_AUTH_TOKEN=//' | sed 's/^"//;s/"$//' | head -n 1)"
+  if [[ -n "$NGROK_AUTH_TOKEN" ]]; then
+    export NGROK_AUTHTOKEN="$NGROK_AUTH_TOKEN"
+  fi
+fi
+
 is_port_in_use() {
   ss -ltn "sport = :$PORT" | awk 'NR>1 { found=1 } END { exit found ? 0 : 1 }'
 }

@@ -48,7 +48,7 @@ The user wants the app to:
   - Managing multi-leg rehearsal state
   - New UI for "break rehearsal" (e.g., "practice your exit at mile 127")
 
-**Verdict:** This is **feature creep**. The break planning component in particular is a new product surface (trip planning, not route rehearsal). Even hotspots-only mode is a new practice mode that adds significant state complexity.
+**Verdict:** This is **feature creep**. The break planning component in particular is a new product surface (trip planning, not road route rehearsal). Even hotspots-only mode is a new practice mode that adds significant state complexity.
 
 ---
 

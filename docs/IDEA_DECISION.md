@@ -2,7 +2,7 @@
 
 ## Shortlist
 
-### 1. Route Rehearsal
+### 1. Road Route Rehearsal
 
 Driver-confusion detection and rehearsal for unfamiliar routes. The app identifies route pain points such as ambiguous exits, lane splits, missed merges, hidden entrances, and signage mismatches, then lets the driver rehearse those exact moments.
 
@@ -44,9 +44,9 @@ Rules mutate as people play, with procedural rule cards and a party-game flow.
 
 ## Recommendation
 
-Build **Route Rehearsal** unless the team needs the safest possible live demo. If safety is the priority, build **AI Jackbox / Procedural Party Game**.
+Build **Road Route Rehearsal** unless the team needs the safest possible live demo. If safety is the priority, build **AI Jackbox / Procedural Party Game**.
 
-Route Rehearsal has the best blend of novelty, usefulness, and sponsor coverage. It can still include a playful mode for demo appeal, but the core pitch stays practical.
+Road Route Rehearsal has the best blend of novelty, usefulness, and sponsor coverage. It can still include a playful mode for demo appeal, but the core pitch stays practical.
 
 ## Sponsor Strategy
 

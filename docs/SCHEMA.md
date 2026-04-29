@@ -1,6 +1,6 @@
-# Route Rehearsal Data Schema
+# Road Route Rehearsal Data Schema
 
-This document defines the first-pass data model for the Route Rehearsal MVP.
+This document defines the first-pass data model for the Road Route Rehearsal MVP.
 
 The goal is to support three immediate needs:
 

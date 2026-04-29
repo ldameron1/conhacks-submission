@@ -2,7 +2,7 @@
 
 ## What Is Built
 
-The repo now has a working browser demo for Route Rehearsal:
+The repo now has a working browser demo for Road Route Rehearsal:
 
 - `index.html` renders the full-screen demo UI
 - `demo-app.js` loads the canned routes and drives playback

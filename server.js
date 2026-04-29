@@ -1,5 +1,5 @@
 /**
- * Route Rehearsal — Unified Server
+ * Road Route Rehearsal — Unified Server
  *
  * Serves static files (replacing python3 -m http.server) AND runs a
  * WebSocket relay so a phone can connect as a steering controller.
@@ -19,6 +19,30 @@ const os = require("os");
 const WebSocket = require("ws");
 
 const PORT = process.env.PORT || 8080;
+
+/* ─────────────── Load .env file ─────────────── */
+function loadEnvFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const lines = content.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      // Remove surrounding quotes
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (!process.env[key]) process.env[key] = value;
+    }
+  } catch (e) {
+    // .env file optional
+  }
+}
+loadEnvFile(path.join(__dirname, ".env"));
 
 const mimeTypes = {
   ".html": "text/html",
@@ -40,7 +64,7 @@ const server = http.createServer((req, res) => {
   if (requestPath === "/config.js") {
     const publicConfig = {
       GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
-      GOOGLE_MAPS_KEY: process.env.GOOGLE_MAPS_KEY || "",
+      GOOGLE_MAPS_KEY: process.env.GOOGLE_MAPS_KEY || process.env.GOOGLE_MAPS_API_DEMO_KEY || "",
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || "",
     };
     const js = `window.__ROUTE_REHEARSAL_CONFIG__ = ${JSON.stringify(publicConfig)};`;
@@ -211,7 +235,7 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   const localhostUrl = `http://localhost:${PORT}`;
-  console.log(`Route Rehearsal server running on ${localhostUrl}`);
+  console.log(`Road Route Rehearsal server running on ${localhostUrl}`);
   console.log(`WebSocket ready on ws://localhost:${PORT}`);
   console.log(`Phone controller page (same device): ${localhostUrl}/controller.html`);
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Route Rehearsal — Controller</title>
+  <title>Road Route Rehearsal — Controller</title>
   <style>
     :root {
       --bg: #0a0e17;
@@ -285,7 +285,7 @@
 
   <!-- Join Screen -->
   <div id="join-screen" class="join-screen">
-    <div class="brand">Route Rehearsal</div>
+    <div class="brand">Road Route Rehearsal</div>
     <p style="font-size:14px;color:var(--text2);text-align:center;max-width:260px;">
       Enter the 4-letter room code shown on the laptop to pair your phone as the steering wheel.
     </p>
@@ -466,9 +466,24 @@
     /* ═══════ Orientation Handling ═══════ */
     function onOrientation(e) {
       if (!permGranted) return;
-      // Use gamma (left/right tilt) for steering.
-      // gamma ranges roughly -90..90.
-      let raw = e.gamma || 0;
+
+      // Determine which axis to use based on screen orientation
+      // Portrait: gamma is left/right tilt (steering)
+      // Landscape: beta is left/right tilt (steering)
+      const angle = screen.orientation ? screen.orientation.angle : (window.orientation || 0);
+      const isLandscape = Math.abs(angle) === 90 || Math.abs(angle) === 270;
+
+      let raw;
+      if (isLandscape) {
+        raw = e.beta || 0;
+        // In landscape-right (angle = 90 or -270), beta sign is inverted relative to steering direction
+        if (angle === 90 || angle === -270 || angle === 270) {
+          raw = -raw;
+        }
+      } else {
+        raw = e.gamma || 0;
+      }
+
       // Clamp and normalize to -1..1
       if (raw > 45) raw = 45;
       if (raw < -45) raw = -45;

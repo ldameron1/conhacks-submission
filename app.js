@@ -448,20 +448,7 @@ async function startPractice(index = 0) {
   showScreen("practice");
   renderPracticeInfo();
 
-  if (!cesiumInitialized) {
-    try {
-      await cesiumView.initView("cesium-container", state.routeCoords, state.hazards, {
-        onProgress: updateHUD,
-        onHazardApproach: onHazardApproach,
-      });
-      cesiumInitialized = true;
-    } catch (e) {
-      console.warn("CesiumJS init failed, falling back to 2D:", e.message);
-      render2DFallback();
-    }
-  }
-
-  // Always start on Pass 1 (Review)
+  // Always start on Pass 1 (Review) — Cesium is only initialised on-demand in Pass 3
   switchPass(1);
 }
 
@@ -500,7 +487,11 @@ function switchPass(pass) {
   $("split-view-container").style.display = "none";
   $("cesium-container").style.display = "none";
   $("drive-hud").classList.add("hidden");
-  
+  const triPane = $("tri-pane-container");
+  if (triPane) triPane.style.display = "none";
+  const triCesium = $("tri-cesium-container");
+  if (triCesium) triCesium.style.display = "none";
+
   if (pass === 1) {
     // Pass 1: Review (2D Map only)
     $("review-map-container").style.display = "block";
@@ -510,15 +501,8 @@ function switchPass(pass) {
     $("split-view-container").style.display = "flex";
     renderStreetViewPass();
   } else if (pass === 3) {
-    // Pass 3: Drive Sim
-    $("cesium-container").style.display = "block";
-    $("drive-hud").classList.remove("hidden");
-    if (cesiumInitialized) {
-      cesiumView.setMode("drive");
-      cesiumView.jumpToHazard(state.practiceIndex);
-    }
-    // Also update split view inside PIP if active
-    updateStreetViewOverlay();
+    // Pass 3: Tri-pane — Map left, 3D middle, StreetView right
+    showTriPane();
   }
 }
 
@@ -583,20 +567,17 @@ function renderStreetViewPass() {
   updateStreetViewOverlay();
 }
 
-function updateStreetViewOverlay() {
+function updateStreetViewOverlay(containerId = "streetview-content") {
   const h = state.hazards[state.practiceIndex];
   if (!h) return;
-  const content = $("streetview-content");
-  if (content && CONFIG.GOOGLE_MAPS_KEY) {
-    const lat = h.lat;
-    const lng = h.lng;
-    content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
-      src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
-      style="border:0; width:100%; height:100%;"></iframe>`;
-  } else if (content) {
-    content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#222;">
-      StreetView unavailable — no API key.</div>`;
-  }
+  const content = $(containerId);
+  if (!content) return;
+  const lat = h.lat;
+  const lng = h.lng;
+  // Google Maps Street View embed is free and does not require an API key
+  content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="eager"
+    src="https://www.google.com/maps/embed?pb=!4v0!6m8!1m7!1sCAoSLEFGMVFpcE9!2m2!1d${lat}!2d${lng}!3f0!4f0!5f0.7820865974627469!9i3000!10b1!12b1!20b1!27b1!28i3000!30i3000!31i3000!32i3000!33i3000!37i3000"
+    style="border:0; width:100%; height:100%;"></iframe>`;
 }
 
 function updateHUD(data) {
@@ -645,10 +626,7 @@ function render2DFallback() {
     document.querySelector(".practice-view-panel").appendChild(container);
   }
   container.classList.remove("hidden");
-  container.innerHTML = `<div id="fallback-map" style="width:100%; height:100%;"></div>
-    <div class="fallback-notice">
-      3D mode unavailable. Using 2D Satellite fallback.
-    </div>`;
+  container.innerHTML = `<div id="fallback-map" style="width:100%; height:100%;"></div>`;
 
   const h = state.hazards[state.practiceIndex];
   if (state.practiceMap) { state.practiceMap.remove(); }
@@ -695,7 +673,8 @@ function nextHazard() {
       renderStreetViewPass();
     } else if (currentPracticePass === 3) {
       if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
-      updateStreetViewOverlay();
+      updateStreetViewOverlay("tri-streetview-content");
+      updateTriPaneMap();
     }
   }
 }
@@ -704,16 +683,81 @@ function prevHazard() {
   if (state.practiceIndex > 0) {
     state.practiceIndex--;
     renderPracticeInfo();
-    
+
     if (currentPracticePass === 1) {
       renderReviewPass();
     } else if (currentPracticePass === 2) {
       renderStreetViewPass();
     } else if (currentPracticePass === 3) {
       if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
-      updateStreetViewOverlay();
+      updateStreetViewOverlay("tri-streetview-content");
+      updateTriPaneMap();
     }
   }
+}
+
+/* ═══════════════════ TRI-PANE (Pass 3) ═══════════════════ */
+async function showTriPane() {
+  const triPane = $("tri-pane-container");
+  if (!triPane) return;
+  triPane.style.display = "flex";
+  $("drive-hud").classList.remove("hidden");
+
+  // Initialise Cesium on-demand if needed
+  if (!cesiumInitialized) {
+    try {
+      await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
+        onProgress: updateHUD,
+        onHazardApproach: onHazardApproach,
+      });
+      cesiumInitialized = true;
+    } catch (e) {
+      console.warn("CesiumJS init failed in tri-pane:", e.message);
+      // Render a 2D map directly inside the middle pane so the layout still works
+      const h = state.hazards[state.practiceIndex];
+      $("tri-cesium-container").innerHTML = `<div id="tri-fallback-map" style="width:100%; height:100%;"></div>`;
+      if (h) {
+        const map = L.map("tri-fallback-map").setView([h.lat, h.lng], 18);
+        L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(map);
+        const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+        L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(map);
+        L.circleMarker([h.lat, h.lng], { radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2 }).addTo(map);
+      }
+    }
+  }
+
+  if (cesiumInitialized) {
+    cesiumView.setMode("drive");
+    cesiumView.jumpToHazard(state.practiceIndex);
+  }
+
+  updateTriPaneMap();
+  updateStreetViewOverlay("tri-streetview-content");
+}
+
+function updateTriPaneMap() {
+  const h = state.hazards[state.practiceIndex];
+  if (!h) return;
+  const container = $("tri-map-container");
+  if (!container) return;
+
+  if (!state.triMap) {
+    state.triMap = L.map(container).setView([h.lat, h.lng], 18);
+    L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.triMap);
+    const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+    L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.triMap);
+  } else {
+    state.triMap.invalidateSize();
+    state.triMap.flyTo([h.lat, h.lng], 18);
+  }
+
+  if (state.triMapMarkers) state.triMapMarkers.forEach(m => m.remove());
+  state.triMapMarkers = [];
+
+  const marker = L.circleMarker([h.lat, h.lng], {
+    radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
+  }).addTo(state.triMap);
+  state.triMapMarkers.push(marker);
 }
 
 /* ═══════════════════ TOAST ═══════════════════ */

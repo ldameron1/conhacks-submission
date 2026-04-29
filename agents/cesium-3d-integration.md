@@ -8,7 +8,7 @@
 
 ## Task Summary
 
-Integrated CesiumJS 3D globe with three viewing modes (Overview, Drive, Drive+Map) into the Route Rehearsal practice screen, replacing the previous Leaflet satellite map.
+Integrated CesiumJS 3D globe with three viewing modes (Overview, Drive, Drive+Map) into the Road Route Rehearsal practice screen, replacing the previous Leaflet satellite map.
 
 ## Decisions Made
 
