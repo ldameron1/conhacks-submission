@@ -556,6 +556,25 @@
       }
       .cesium-viewer-bottom,
       .cesium-viewer-toolbar { display: none !important; }
+      .practice-2d-fallback {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 5;
+}
+.fallback-notice {
+  position: absolute;
+  top: 70px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 170, 0, 0.9);
+  color: #000;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  z-index: 1000;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+.hidden { display: none !important; }
       .cesium-credit-logoContainer,
       .cesium-credit-expand-link { opacity: 0.3; font-size: 10px; }
 
@@ -624,6 +643,171 @@
         font-weight: 700;
         color: var(--text);
       }
+      .hud-btn {
+        pointer-events: auto;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 8px 14px;
+        font-size: 16px;
+        cursor: pointer;
+        color: var(--text);
+        transition: all 0.2s;
+      }
+      .hud-btn:hover { background: rgba(255,255,255,0.15); }
+      .hud-btn.muted { opacity: 0.5; }
+      .hud-bottom {
+        position: absolute;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 12px;
+        pointer-events: auto;
+      }
+      .hud-btn-lg {
+        pointer-events: auto;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        border: none;
+        border-radius: var(--radius);
+        padding: 12px 28px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #000;
+        transition: all 0.2s;
+        box-shadow: 0 4px 20px rgba(0,212,170,0.3);
+      }
+      .hud-btn-lg:hover { transform: scale(1.05); box-shadow: 0 6px 25px rgba(0,212,170,0.5); }
+      .hud-btn-lg.active { background: rgba(255,68,102,0.9); color: #fff; }
+      .finish-btn { background: linear-gradient(135deg, #ff4466, #ff6b35); color: #fff; }
+
+      /* ═══════════ RECAP SCREEN ═══════════ */
+      .recap-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 40px 24px;
+        text-align: center;
+      }
+      .recap-header h1 {
+        font-size: 32px;
+        font-weight: 900;
+        margin: 0 0 8px 0;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .recap-header p {
+        color: var(--text3);
+        font-size: 14px;
+        margin: 0;
+      }
+      .recap-score-ring {
+        margin: 32px 0;
+        display: flex;
+        justify-content: center;
+      }
+      .score-circle {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        border: 6px solid var(--border2);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.5s;
+      }
+      .score-circle.good { border-color: var(--accent); }
+      .score-circle.ok { border-color: #ffaa00; }
+      .score-circle.low { border-color: #ff4466; }
+      .score-value {
+        font-size: 56px;
+        font-weight: 900;
+        line-height: 1;
+        color: var(--text);
+      }
+      .score-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text3);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .recap-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 24px 0;
+      }
+      .recap-stat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 8px;
+      }
+      .recap-stat-val {
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--accent);
+      }
+      .recap-stat-label {
+        font-size: 11px;
+        color: var(--text3);
+        margin-top: 4px;
+      }
+      .recap-hazard-list {
+        text-align: left;
+        margin: 24px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .recap-hazard-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 12px 16px;
+        font-size: 14px;
+      }
+      .recap-hazard-item .status {
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+      .recap-hazard-item .name {
+        flex: 1;
+        font-weight: 600;
+      }
+      .recap-hazard-item .verdict {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+      }
+      .verdict.reviewed { background: rgba(0,212,170,0.2); color: var(--accent); }
+      .verdict.missed { background: rgba(255,68,102,0.2); color: #ff4466; }
+      .recap-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 32px;
+      }
+      .btn-secondary {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 28px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        color: var(--text);
+        transition: all 0.2s;
+      }
+      .btn-secondary:hover { background: var(--surface3); }
 
       /* ═══════════ MINI-MAP (PiP) ═══════════ */
       #cesium-minimap {
@@ -854,14 +1038,20 @@
           <!-- Drive HUD overlay -->
           <div id="drive-hud" class="drive-hud hidden">
             <div class="hud-top">
+              <div class="hud-pill">🚗 <span class="val" id="hud-speed">--</span> km/h</div>
               <div class="hud-pill">Next hazard: <span class="val" id="hud-dist">--</span> m</div>
               <div class="hud-pill">Progress: <span class="val" id="hud-progress">0</span>%</div>
+              <button id="btn-mute" class="hud-btn" title="Toggle narration">🔊</button>
+              <button id="btn-difficulty" class="hud-btn" title="Cycle difficulty">🟢 Calm</button>
             </div>
             <div class="hud-alert" id="hud-alert">⚠ Hazard ahead!</div>
+            <div class="hud-bottom">
+              <button id="btn-autodrive" class="hud-btn-lg">▶ Start Driving</button>
+              <button id="btn-finish" class="hud-btn-lg finish-btn" style="display:none">🏁 Finish Rehearsal</button>
+            </div>
             <div class="hud-controls-hint">
-              <kbd>W</kbd><kbd>↑</kbd> Forward &nbsp; <kbd>S</kbd><kbd>↓</kbd> Back &nbsp;
               <kbd>A</kbd><kbd>←</kbd> Look left &nbsp; <kbd>D</kbd><kbd>→</kbd> Look right &nbsp;
-              <kbd>Space</kbd> Center view
+              <kbd>Space</kbd> Center view &nbsp; <kbd>B</kbd> Brake
             </div>
           </div>
           <!-- Mini-map for PiP mode -->
@@ -890,6 +1080,45 @@
 
     <!-- Toast -->
     <div id="toast"></div>
+
+    <!-- ═══════════ RECAP SCREEN ═══════════ -->
+    <div id="screen-recap" class="screen">
+      <div class="recap-container">
+        <div class="recap-header">
+          <h1>🏁 Rehearsal Complete</h1>
+          <p id="recap-route">Route Name</p>
+        </div>
+        <div class="recap-score-ring">
+          <div class="score-circle" id="recap-score-circle">
+            <span class="score-value" id="recap-score">0</span>
+            <span class="score-label">confidence</span>
+          </div>
+        </div>
+        <div class="recap-stats">
+          <div class="recap-stat">
+            <div class="recap-stat-val" id="recap-reviewed">0</div>
+            <div class="recap-stat-label">Hazards Reviewed</div>
+          </div>
+          <div class="recap-stat">
+            <div class="recap-stat-val" id="recap-missed">0</div>
+            <div class="recap-stat-label">Missed</div>
+          </div>
+          <div class="recap-stat">
+            <div class="recap-stat-val" id="recap-time">0:00</div>
+            <div class="recap-stat-label">Time</div>
+          </div>
+          <div class="recap-stat">
+            <div class="recap-stat-val" id="recap-completion">0%</div>
+            <div class="recap-stat-label">Route Done</div>
+          </div>
+        </div>
+        <div id="recap-hazard-list" class="recap-hazard-list"></div>
+        <div class="recap-actions">
+          <button id="btn-retry" class="btn-primary">🔄 Retry Route</button>
+          <button id="btn-recap-new" class="btn-secondary">📍 New Route</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="./app.js"></script>
   </body>

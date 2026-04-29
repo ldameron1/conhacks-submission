@@ -1,11 +1,14 @@
 import { scanRoute } from "./hazard-scanner.js";
 import * as cesiumView from "./cesium-view.js";
+import * as narration from "./narration.js";
+import * as distractions from "./distractions.js";
 
 /* ═══════════════════ CONFIG ═══════════════════ */
 const CONFIG = {
   GEMINI_API_KEY: "AIzaSyCAk3KfuN_i_GIWwGEez4Q8Lg-pnrE1sQ8",
   GOOGLE_MAPS_KEY: "",
-  CESIUM_ION_TOKEN: "", // Free: sign up at cesium.com/ion/signup — enables 3D buildings
+  CESIUM_ION_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxY2RkMzlmZi1lMGI4LTRmNzUtOGU2MS01ZDMxZWM2ODYwOGIiLCJpZCI6NDI1MzE3LCJpYXQiOjE3Nzc0NjM1MjR9.W0oxtmgNcJJMRxnsOA0KzkW4ed3eTXvM4GE4ZCffcQo", // Free Cesium ion → Google Photorealistic 3D Tiles
+  ELEVENLABS_API_KEY: "e13d3e5124b3f8f46d11a20d62c4c1cc339d8b7c404d3c01d3afb9fbedea8b9a",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
   NOMINATIM_URL: "https://nominatim.openstreetmap.org/search",
   DARK_TILES: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -28,6 +31,14 @@ const state = {
   practiceMap: null,
   routeLayer: null,
   geminiInsights: null,
+  // Rehearsal tracking
+  rehearsal: {
+    startTime: 0,
+    hazardReviewed: [],   // boolean per hazard
+    hazardEntryTime: [],  // timestamp when entered hazard zone
+    hazardPauseTime: [],  // ms spent near each hazard
+    routeCompletion: 0,
+  },
 };
 
 /* ═══════════════════ HELPERS ═══════════════════ */
@@ -209,6 +220,15 @@ async function startScan() {
 
     // Done
     updateScanStep(statusEl, progressEl, `Found ${state.hazards.length} hazard${state.hazards.length !== 1 ? "s" : ""}. Loading report...`, 100);
+
+    // Initialize narration and pre-generate audio in background
+    narration.init(CONFIG.ELEVENLABS_API_KEY);
+    narration.pregenerate(state.hazards);
+
+    // Initialize distractions and pre-generate clips in background
+    distractions.init(CONFIG.ELEVENLABS_API_KEY);
+    distractions.pregenerate();
+
     await sleep(600);
     showReport();
   } catch (err) {
@@ -325,26 +345,34 @@ let alertTimeout = null;
 
 async function startPractice(index = 0) {
   state.practiceIndex = index;
+  resetRehearsal();
   showScreen("practice");
   renderPracticeInfo();
 
   if (!cesiumInitialized) {
+    // Set Cesium ion token for Google Photorealistic 3D Tiles
+    if (CONFIG.CESIUM_ION_TOKEN) {
+      Cesium.Ion.defaultAccessToken = CONFIG.CESIUM_ION_TOKEN;
+    }
     try {
       await cesiumView.initView("cesium-container", state.routeCoords, state.hazards, {
         onProgress: updateHUD,
         onHazardApproach: onHazardApproach,
       });
       cesiumInitialized = true;
+      $("cesium-container").classList.remove("hidden");
+      const fallback = $("practice-2d-fallback");
+      if (fallback) fallback.classList.add("hidden");
     } catch (e) {
-      console.error("CesiumJS init failed:", e);
-      showToast("3D view failed to load. Check your connection.");
+      console.warn("CesiumJS init failed, falling back to 2D:", e.message);
+      render2DFallback();
       return;
     }
   }
 
   // Jump to the hazard in the 3D view
   cesiumView.jumpToHazard(index);
-  switchMode("overview");
+  switchMode("drive"); // Default to drive mode for auto-drive
 }
 
 function renderPracticeInfo() {
@@ -389,6 +417,10 @@ function switchMode(mode) {
 function updateHUD(data) {
   $("hud-progress").textContent = Math.round(data.progress);
   $("hud-dist").textContent = data.nextHazardDist < 9999 ? data.nextHazardDist : "--";
+  // Speed is set by auto-drive; update completion tracking
+  if (data.progress > 0) {
+    state.rehearsal.routeCompletion = Math.round(data.progress);
+  }
 }
 
 function onHazardApproach(hazard, index, dist) {
@@ -399,16 +431,70 @@ function onHazardApproach(hazard, index, dist) {
   clearTimeout(alertTimeout);
   alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
 
+  // Play narration
+  narration.playHazard(hazard, index, state.hazards.length);
+
+  // Track rehearsal: mark hazard as reviewed
+  state.rehearsal.hazardReviewed[index] = true;
+  state.rehearsal.hazardEntryTime[index] = Date.now();
+
   // Update info panel to show this hazard
   state.practiceIndex = index;
   renderPracticeInfo();
+}
+
+/* ═══════════════════ 2D FALLBACK ═══════════════════ */
+function render2DFallback() {
+  cesiumInitialized = false;
+  $("cesium-container").classList.add("hidden");
+  $("drive-hud").classList.add("hidden");
+
+  let container = $("practice-2d-fallback");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "practice-2d-fallback";
+    container.className = "practice-2d-fallback";
+    $("practice-view").appendChild(container);
+  }
+  container.classList.remove("hidden");
+  container.innerHTML = `<div id="fallback-map" style="width:100%; height:100%;"></div>
+    <div class="fallback-notice">
+      3D mode unavailable. Using 2D Satellite fallback.
+    </div>`;
+
+  const h = state.hazards[state.practiceIndex];
+  if (state.practiceMap) { state.practiceMap.remove(); }
+
+  state.practiceMap = L.map("fallback-map").setView([h.lat, h.lng], 18);
+  L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.practiceMap);
+
+  // Draw route
+  const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
+  L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.practiceMap);
+
+  // Markers
+  state.hazards.forEach((hz, idx) => {
+    const isActive = idx === state.practiceIndex;
+    L.circleMarker([hz.lat, hz.lng], {
+      radius: isActive ? 12 : 6,
+      fillColor: isActive ? "#ff4466" : "#ffaa00",
+      fillOpacity: 0.9,
+      color: "#fff",
+      weight: 2
+    }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
+  });
 }
 
 function nextHazard() {
   if (state.practiceIndex < state.hazards.length - 1) {
     state.practiceIndex++;
     renderPracticeInfo();
-    cesiumView.jumpToHazard(state.practiceIndex);
+    if (cesiumInitialized) {
+      cesiumView.jumpToHazard(state.practiceIndex);
+    } else if (state.practiceMap) {
+      const h = state.hazards[state.practiceIndex];
+      state.practiceMap.flyTo([h.lat, h.lng], 18);
+    }
   }
 }
 
@@ -416,7 +502,12 @@ function prevHazard() {
   if (state.practiceIndex > 0) {
     state.practiceIndex--;
     renderPracticeInfo();
-    cesiumView.jumpToHazard(state.practiceIndex);
+    if (cesiumInitialized) {
+      cesiumView.jumpToHazard(state.practiceIndex);
+    } else if (state.practiceMap) {
+      const h = state.hazards[state.practiceIndex];
+      state.practiceMap.flyTo([h.lat, h.lng], 18);
+    }
   }
 }
 
@@ -426,6 +517,167 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add("visible");
   setTimeout(() => t.classList.remove("visible"), 3000);
+}
+
+/* ═══════════════════ AUTO-DRIVE ═══════════════════ */
+let autoDriving = false;
+let autoDriveInterval = null;
+const AUTO_DRIVE_SPEED = 0.08; // route index units per frame (~30-50 km/h feel)
+
+function toggleAutoDrive() {
+  if (autoDriving) {
+    stopAutoDrive();
+  } else {
+    startAutoDrive();
+  }
+}
+
+function startAutoDrive() {
+  autoDriving = true;
+  state.rehearsal.startTime = state.rehearsal.startTime || Date.now();
+
+  const btn = $("btn-autodrive");
+  btn.textContent = "⏸ Pause";
+  btn.classList.add("active");
+  $("btn-finish").style.display = "inline-block";
+
+  // Start distraction audio
+  distractions.start();
+
+  // Auto-advance is handled by cesium-view's animation loop via keyboard simulation
+  // We'll use setInterval to feed progress updates
+  autoDriveInterval = setInterval(() => {
+    if (!cesiumInitialized) return;
+
+    const progress = cesiumView.getProgress();
+    const maxProgress = state.routeCoords.length - 1;
+
+    if (progress >= maxProgress - 1) {
+      // Route complete
+      stopAutoDrive();
+      finishRehearsal();
+      return;
+    }
+
+    // Advance
+    cesiumView.setProgress(progress + AUTO_DRIVE_SPEED);
+
+    // Update speed display
+    const speedKmh = Math.round(AUTO_DRIVE_SPEED * 400); // approximate
+    const speedEl = $("hud-speed");
+    if (speedEl) speedEl.textContent = speedKmh;
+
+    // Track completion
+    state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
+  }, 1000 / 30); // 30 fps
+}
+
+function stopAutoDrive() {
+  autoDriving = false;
+  clearInterval(autoDriveInterval);
+  autoDriveInterval = null;
+
+  // Pause distractions too
+  distractions.stop();
+
+  const btn = $("btn-autodrive");
+  btn.textContent = "▶ Resume";
+  btn.classList.remove("active");
+}
+
+/* ═══════════════════ RECAP SCREEN ═══════════════════ */
+function finishRehearsal() {
+  stopAutoDrive();
+  narration.stop();
+  distractions.stop();
+  cesiumView.destroy();
+  cesiumInitialized = false;
+
+  const elapsed = Date.now() - (state.rehearsal.startTime || Date.now());
+  const reviewed = state.rehearsal.hazardReviewed.filter(Boolean).length;
+  const total = state.hazards.length;
+  const missed = total - reviewed;
+  const completion = state.rehearsal.routeCompletion || 0;
+
+  // Confidence score: weighted combination
+  const hazardScore = total > 0 ? (reviewed / total) * 60 : 60; // 60% weight
+  const completionScore = (completion / 100) * 30; // 30% weight
+  const timeBonus = elapsed > 30000 ? 10 : (elapsed / 30000) * 10; // 10% for spending enough time
+  const confidence = Math.min(100, Math.round(hazardScore + completionScore + timeBonus));
+
+  // Render
+  showScreen("recap");
+  $("recap-route").textContent = `${state.origin.label} → ${state.destination.label}`;
+  $("recap-score").textContent = confidence;
+  $("recap-reviewed").textContent = reviewed;
+  $("recap-missed").textContent = missed;
+  $("recap-completion").textContent = `${completion}%`;
+
+  // Time
+  const mins = Math.floor(elapsed / 60000);
+  const secs = Math.floor((elapsed % 60000) / 1000);
+  $("recap-time").textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+  // Score circle color
+  const circle = $("recap-score-circle");
+  circle.className = "score-circle " + (confidence >= 70 ? "good" : confidence >= 40 ? "ok" : "low");
+
+  // Hazard breakdown
+  const list = $("recap-hazard-list");
+  list.innerHTML = "";
+  state.hazards.forEach((h, i) => {
+    const wasReviewed = state.rehearsal.hazardReviewed[i];
+    const item = document.createElement("div");
+    item.className = "recap-hazard-item";
+    item.innerHTML = `
+      <span class="status">${wasReviewed ? "✅" : "❌"}</span>
+      <span class="name">${h.label}</span>
+      <span class="verdict ${wasReviewed ? "reviewed" : "missed"}">${wasReviewed ? "Reviewed" : "Missed"}</span>
+    `;
+    list.appendChild(item);
+  });
+
+  // Narrate recap
+  narration.playText(`Rehearsal complete. Your confidence score is ${confidence} percent. You reviewed ${reviewed} out of ${total} hazards.`);
+}
+
+function resetRehearsal() {
+  state.rehearsal = {
+    startTime: 0,
+    hazardReviewed: [],
+    hazardEntryTime: [],
+    hazardPauseTime: [],
+    routeCompletion: 0,
+  };
+}
+
+/* ═══════════════════ MUTE TOGGLE ═══════════════════ */
+function toggleMute() {
+  const muted = !narration.isMuted();
+  narration.setMuted(muted);
+  const btn = $("btn-mute");
+  btn.textContent = muted ? "🔇" : "🔊";
+  btn.classList.toggle("muted", muted);
+}
+
+/* ═══════════════════ DIFFICULTY ═══════════════════ */
+const DIFFICULTY_CYCLE = ["calm", "moderate", "intense"];
+const DIFFICULTY_LABELS = {
+  calm: "🟢 Calm",
+  moderate: "🟡 Moderate",
+  intense: "🔴 Intense",
+};
+
+function cycleDifficulty() {
+  const current = distractions.getDifficulty();
+  const idx = DIFFICULTY_CYCLE.indexOf(current);
+  const next = DIFFICULTY_CYCLE[(idx + 1) % DIFFICULTY_CYCLE.length];
+  distractions.setDifficulty(next);
+  
+  const btn = $("btn-difficulty");
+  btn.textContent = DIFFICULTY_LABELS[next];
+  
+  showToast(`Difficulty: ${DIFFICULTY_LABELS[next]}`);
 }
 
 /* ═══════════════════ EXAMPLE ROUTES ═══════════════════ */
@@ -484,12 +736,36 @@ function wireEvents() {
     if (e.key === "Enter") startScan();
   });
 
+  // Auto-drive controls
+  $("btn-autodrive").addEventListener("click", toggleAutoDrive);
+  $("btn-mute").addEventListener("click", toggleMute);
+  $("btn-difficulty").addEventListener("click", cycleDifficulty);
+  $("btn-finish").addEventListener("click", finishRehearsal);
+
+  // Recap buttons
+  $("btn-retry").addEventListener("click", () => {
+    resetRehearsal();
+    startPractice(0);
+  });
+  $("btn-recap-new").addEventListener("click", () => {
+    resetRehearsal();
+    narration.destroy();
+    distractions.destroy();
+    showScreen("input");
+  });
+
   // Escape to go back
   document.addEventListener("keydown", (e) => {
     if (state.screen === "practice" && e.key === "Escape") {
+      stopAutoDrive();
+      narration.stop();
       cesiumView.destroy();
       cesiumInitialized = false;
       showScreen("report");
+    }
+    // Brake key
+    if (state.screen === "practice" && (e.key === "b" || e.key === "B") && autoDriving) {
+      stopAutoDrive();
     }
   });
 }
