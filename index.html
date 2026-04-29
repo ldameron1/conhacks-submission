@@ -342,6 +342,34 @@
         transition: background 0.15s;
       }
       .btn-secondary:hover { background: var(--surface3); }
+      .report-options {
+        margin-top: 16px;
+      }
+      .hotspots-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text2);
+        user-select: none;
+      }
+      .hotspots-toggle input {
+        cursor: pointer;
+        accent-color: var(--accent);
+      }
+      .route-nudge {
+        margin-top: 12px;
+        padding: 12px 16px;
+        background: rgba(255, 170, 0, 0.1);
+        border: 1px solid rgba(255, 170, 0, 0.3);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        color: var(--warning);
+      }
+      .route-nudge strong {
+        font-weight: 700;
+      }
       .report-body {
         display: flex;
         flex: 1;
@@ -1125,6 +1153,13 @@
           <button id="btn-start-practice" class="btn-primary">▶ Start Practice</button>
           <button id="btn-new-route" class="btn-secondary">New Route</button>
         </div>
+        <div class="report-options">
+          <label class="hotspots-toggle">
+            <input type="checkbox" id="hotspots-only">
+            <span>🔥 Hotspots Only (practice only at hazard locations)</span>
+          </label>
+        </div>
+        <div id="route-nudge" class="route-nudge" style="display: none;"></div>
       </div>
       <div class="report-body">
         <div class="report-map-panel">

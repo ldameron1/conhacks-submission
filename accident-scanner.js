@@ -244,10 +244,13 @@ export async function scanAccidents(coords) {
       if (lat == null || lon == null) continue;
 
       const dist = distanceToRoute({ lat, lon }, coords);
-      if (dist > 120) continue; // only keep hazards close to route
+      if (dist > 50) continue; // only keep hazards on or immediately adjacent to the route
 
       const h = parseElement(el, lat, lon, dist);
-      if (h) hazards.push(h);
+      if (h) {
+        h.source = "overpass";
+        hazards.push(h);
+      }
     }
 
     // Deduplicate by location (within 25 m)

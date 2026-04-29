@@ -33,6 +33,7 @@ const state = {
   practiceMap: null,
   routeLayer: null,
   geminiInsights: null,
+  hotspotsOnly: false,
   // Rehearsal tracking
   rehearsal: {
     startTime: 0,
@@ -287,6 +288,22 @@ function showReport() {
   $("stat-hazards").textContent = String(state.hazards.length);
   $("stat-high").textContent = String(state.hazards.filter((h) => h.severity === "high").length);
 
+  // Route nudge for long routes (>3h)
+  const nudgeEl = $("route-nudge");
+  if (nudgeEl) {
+    const hours = state.routeDuration / 3600;
+    if (hours >= 5) {
+      nudgeEl.style.display = "block";
+      nudgeEl.innerHTML = `<strong>Long straight drive detected (${formatDuration(state.routeDuration)}).</strong> Consider adding rest stops to your plan. <a href="#" id="nudge-add-breaks" style="color:var(--accent);text-decoration:underline;">Plan breaks</a>`;
+    } else if (hours >= 3) {
+      nudgeEl.style.display = "block";
+      nudgeEl.innerHTML = `<strong>Long route detected (${formatDuration(state.routeDuration)}).</strong> 🔥 <a href="#" id="nudge-hotspots" style="color:var(--accent);text-decoration:underline;">Try Hotspots Only</a> to rehearse just the tricky parts.`;
+    } else {
+      nudgeEl.style.display = "none";
+      nudgeEl.innerHTML = "";
+    }
+  }
+
   // Map
   initReportMap();
 
@@ -405,7 +422,11 @@ async function startPractice(index = 0) {
 
   // Jump to the hazard in the 3D view
   cesiumView.jumpToHazard(index);
-  switchMode("drive"); // Default to drive mode for auto-drive
+  if (state.hotspotsOnly) {
+    switchMode("overview"); // Hotspots-only: start in overview so user can look around
+  } else {
+    switchMode("drive"); // Full-route: default to drive mode for auto-drive
+  }
 }
 
 function renderPracticeInfo() {
@@ -413,7 +434,8 @@ function renderPracticeInfo() {
   if (!h) return;
 
   // Counter
-  $("practice-counter").textContent = `Hazard ${state.practiceIndex + 1} of ${state.hazards.length}`;
+  const label = state.hotspotsOnly ? "Hotspot" : "Hazard";
+  $("practice-counter").textContent = `${label} ${state.practiceIndex + 1} of ${state.hazards.length}`;
   $("practice-progress-fill").style.width = `${((state.practiceIndex + 1) / state.hazards.length) * 100}%`;
 
   // Info panel
@@ -806,6 +828,33 @@ function wireEvents() {
     showScreen("report");
   });
   $("btn-start-practice").addEventListener("click", () => startPractice(0));
+
+  // Hotspots-only toggle
+  const hotspotsToggle = $("hotspots-only");
+  if (hotspotsToggle) {
+    hotspotsToggle.addEventListener("change", (e) => {
+      state.hotspotsOnly = e.target.checked;
+      // Also update nudge link if clicked
+      const nudgeLink = $("nudge-hotspots");
+      if (nudgeLink && state.hotspotsOnly) {
+        hotspotsToggle.checked = true;
+      }
+    });
+  }
+
+  // Route nudge click handlers (event delegation)
+  document.addEventListener("click", (e) => {
+    if (e.target.id === "nudge-hotspots") {
+      e.preventDefault();
+      state.hotspotsOnly = true;
+      if (hotspotsToggle) hotspotsToggle.checked = true;
+      startPractice(0);
+    }
+    if (e.target.id === "nudge-add-breaks") {
+      e.preventDefault();
+      alert("Break planning coming soon — for now, plan your stops manually!");
+    }
+  });
   $("btn-prev-hazard").addEventListener("click", prevHazard);
   $("btn-next-hazard").addEventListener("click", nextHazard);
   $("btn-new-route").addEventListener("click", () => {

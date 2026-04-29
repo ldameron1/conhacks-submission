@@ -24,7 +24,6 @@ let keysDown = new Set();
 let loopId = null;
 let callbacks = {};
 let positionMarker = null;
-let routeHeights = [];     // sampled terrain heights along route
 let hasPhotorealistic = false; // true if Google 3D Tiles loaded
 let leafletMap = null;
 let leafletMarker = null;
@@ -32,7 +31,7 @@ let leafletRoute = null;
 
 const MOVE_SPEED = 0.12;   // index units per frame
 const LOOK_SPEED = 2.5;    // degrees per frame
-const DRIVER_HEIGHT = 4;   // meters above actual terrain surface
+const DRIVER_HEIGHT = 30;   // meters above ellipsoid (fixed, no terrain sampling)
 const HAZARD_ALERT_DIST = 100; // meters
 const DEG = Math.PI / 180;
 let lastAlertedHazard = -1;
@@ -79,52 +78,6 @@ function getRouteHeading(progress) {
   return headingBetween(a, b);
 }
 
-function interpolateHeight(progress) {
-  if (routeHeights.length === 0) return 0;
-  const idx = Math.floor(progress);
-  const frac = progress - idx;
-  if (idx >= routeHeights.length - 1) return routeHeights[routeHeights.length - 1];
-  if (idx < 0) return routeHeights[0];
-  return routeHeights[idx] + (routeHeights[idx + 1] - routeHeights[idx]) * frac;
-}
-
-async function sampleRouteHeights() {
-  if (!viewer || !viewer.terrainProvider) return;
-  try {
-    const cartographics = routeCoords.map(c => Cesium.Cartographic.fromDegrees(c.lng, c.lat));
-    await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
-    routeHeights = cartographics.map(c => c.height);
-    console.log("[CesiumView] Sampled", routeHeights.length, "terrain heights");
-  } catch (e) {
-    console.warn("[CesiumView] Terrain sampling failed:", e.message);
-    routeHeights = routeCoords.map(() => 0);
-  }
-}
-
-/* ═══════════════ 3D GEOMETRY SOURCE CONFIG ═══════════════ */
-/**
- * Available city / region-specific 3D geometry repositories:
- *   - Google Photorealistic 3D Tiles (global, free, photogrammetry)
- *   - Cesium ion OSM Buildings        (global, free, extruded polygons)
- *   - Cesium ion Vexcel 3D Cities   (select cities, commercial, high-detail mesh)
- *   - Cesium ion Japan 3D Buildings (Japan only, free, CityGML-derived)
- *   - National open-data portals    (e.g., UK Ordnance Survey, SwissTopo, NYC OpenData)
- *
- * For a general route-rehearsal app we keep the fallback chain below.
- * To plug in a city-specific asset, replace createGooglePhotorealistic3DTileset()
- * with Cesium.Cesium3DTileset.fromIonAssetId(YOUR_ASSET_ID).
- */
-const CITY_GEOMETRY_ASSET_ID = null; // e.g., 96188 for NYC 3D Buildings via ion
-
-async function loadPrimaryTileset() {
-  if (CITY_GEOMETRY_ASSET_ID) {
-    const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(CITY_GEOMETRY_ASSET_ID);
-    return { tileset, source: "city-asset" };
-  }
-  const tileset = await Cesium.createGooglePhotorealistic3DTileset();
-  return { tileset, source: "google-photorealistic" };
-}
-
 /* ═══════════════ INIT ═══════════════ */
 
 export async function initView(containerId, coords, hazards, cbs) {
@@ -143,68 +96,9 @@ export async function initView(containerId, coords, hazards, cbs) {
   const hasIonToken = Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 10;
 
   try {
-    if (hasIonToken) {
-      // ── TIER 1: Primary 3D geometry (Google Photorealistic or city-specific ion asset) ──
-      try {
-        console.log("[CesiumView] Attempting primary 3D tileset...");
-
-        // Keep globe enabled so we can sample terrain heights for camera positioning
-        viewer = new Cesium.Viewer(containerId, {
-          animation: false,
-          baseLayerPicker: false,
-          fullscreenButton: false,
-          geocoder: false,
-          homeButton: false,
-          infoBox: false,
-          sceneModePicker: false,
-          selectionIndicator: false,
-          timeline: false,
-          navigationHelpButton: false,
-          scene3DOnly: true,
-          showRenderLoopErrors: false,
-          orderIndependentTranslucency: false,
-          contextOptions: {
-            webgl: { preserveDrawingBuffer: true },
-          },
-        });
-
-        // Load world terrain for accurate surface height sampling
-        try {
-          viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
-          console.log("[CesiumView] World Terrain loaded for height sampling");
-        } catch (terrErr) {
-          console.warn("[CesiumView] World Terrain failed:", terrErr.message);
-        }
-
-        // Increase request throughput for Google's tile server
-        Cesium.RequestScheduler.requestsByServer["tile.googleapis.com:443"] = 18;
-
-        const { tileset, source } = await loadPrimaryTileset();
-        viewer.scene.primitives.add(tileset);
-        // Hide globe base so tiles are fully visible; terrain provider still works for sampling
-        if (viewer.scene.globe) viewer.scene.globe.show = false;
-        hasPhotorealistic = true;
-        console.log(`[CesiumView] ✅ Primary 3D tileset loaded (${source})`);
-      } catch (photoErr) {
-        console.warn("[CesiumView] Primary tileset failed, trying OSM Buildings...", photoErr.message);
-        // Clean up failed viewer
-        if (viewer) { viewer.destroy(); viewer = null; }
-
-        // ── TIER 2: OSM Buildings on satellite globe ──
-        viewer = await createSatelliteViewer(containerId);
-        try {
-          const buildings = await Cesium.createOsmBuildingsAsync();
-          viewer.scene.primitives.add(buildings);
-          console.log("[CesiumView] ✅ OSM Buildings loaded (3D extruded buildings)");
-        } catch (osmErr) {
-          console.warn("[CesiumView] OSM Buildings also failed:", osmErr.message);
-        }
-      }
-    } else {
-      // ── TIER 3: Flat satellite globe (no token) ──
-      console.log("[CesiumView] No Cesium ion token — using flat satellite imagery");
-      viewer = await createSatelliteViewer(containerId);
-    }
+    // ── Use plain satellite imagery to avoid IZ errors ──
+    console.log("[CesiumView] Using plain satellite imagery (3D buildings disabled due to compatibility)");
+    viewer = await createSatelliteViewer(containerId);
   } catch (e) {
     console.error("CesiumJS viewer creation failed:", e);
     throw new Error("WebGL not available — 3D view requires a GPU-enabled browser.");
@@ -216,13 +110,9 @@ export async function initView(containerId, coords, hazards, cbs) {
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#1a1e2e");
   }
 
-  // Sample actual terrain heights so camera rides the surface
-  await sampleRouteHeights();
-
-  // Build route polyline from sampled terrain heights (+3m above surface)
-  const positions = routeCoords.map((c, i) => {
-    const h = routeHeights[i] || 0;
-    return Cesium.Cartesian3.fromDegrees(c.lng, c.lat, h + 3);
+  // Build route polyline with fixed height above ellipsoid
+  const positions = routeCoords.map((c) => {
+    return Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 20);
   });
   routeEntity = viewer.entities.add({
     polyline: {
@@ -232,41 +122,32 @@ export async function initView(containerId, coords, hazards, cbs) {
         glowPower: 0.3,
         color: Cesium.Color.fromCssColorString("#00d4aa"),
       }),
-      clampToGround: false, // heights already baked in
+      clampToGround: false,
     },
   });
 
   // Start / End markers
-  const startH = routeHeights[0] || 0;
   viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, startH + 5),
+    position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, 25),
     point: { pixelSize: 14, color: Cesium.Color.fromCssColorString("#00d4aa"), outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
     label: { text: "START", font: "bold 14px sans-serif", fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
              outlineWidth: 3, outlineColor: Cesium.Color.BLACK, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -18) },
   });
 
   const last = routeCoords[routeCoords.length - 1];
-  const endH = routeHeights[routeHeights.length - 1] || 0;
   viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(last.lng, last.lat, endH + 5),
+    position: Cesium.Cartesian3.fromDegrees(last.lng, last.lat, 25),
     point: { pixelSize: 14, color: Cesium.Color.fromCssColorString("#0088ff"), outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
     label: { text: "END", font: "bold 14px sans-serif", fillColor: Cesium.Color.WHITE, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
              outlineWidth: 3, outlineColor: Cesium.Color.BLACK, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -18) },
   });
 
-  // Hazard markers — each at nearest route point terrain height + 15m
+  // Hazard markers — each at fixed height
   hazardMarkers = [];
   hazardData.forEach((h, i) => {
     const color = h.severity === "high" ? "#ff4466" : h.severity === "medium" ? "#ffaa00" : "#66bbff";
-    let closestIdx = 0;
-    let closestDist = Infinity;
-    routeCoords.forEach((c, idx) => {
-      const d = haversine(c, { lat: h.lat, lng: h.lng });
-      if (d < closestDist) { closestDist = d; closestIdx = idx; }
-    });
-    const hgt = (routeHeights[closestIdx] || 0) + 15;
     const entity = viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(h.lng, h.lat, hgt),
+      position: Cesium.Cartesian3.fromDegrees(h.lng, h.lat, 35),
       point: {
         pixelSize: 14,
         color: Cesium.Color.fromCssColorString(color),
@@ -293,7 +174,7 @@ export async function initView(containerId, coords, hazards, cbs) {
 
   // Driver position marker (visible in overview mode)
   positionMarker = viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, startH + 5),
+    position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, DRIVER_HEIGHT + 5),
     point: { pixelSize: 18, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 3 },
     label: {
       text: "▶ YOU",
@@ -343,14 +224,6 @@ async function createSatelliteViewer(containerId) {
       webgl: { preserveDrawingBuffer: true },
     },
   });
-
-  // Load world terrain for accurate surface height in satellite mode too
-  try {
-    v.terrainProvider = await Cesium.createWorldTerrainAsync();
-    console.log("[CesiumView] World Terrain loaded (satellite fallback)");
-  } catch (terrErr) {
-    console.warn("[CesiumView] World Terrain failed (satellite):", terrErr.message);
-  }
 
   v.scene.globe.show = true;
   v.scene.globe.depthTestAgainstTerrain = true;
@@ -409,10 +282,9 @@ function updateDriveCamera() {
   if (!viewer) return;
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
-  const surfaceHeight = interpolateHeight(routeProgress);
 
   viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, surfaceHeight + DRIVER_HEIGHT),
+    destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
       pitch: Cesium.Math.toRadians(-5),  // Slight downward look
@@ -420,9 +292,9 @@ function updateDriveCamera() {
     },
   });
 
-  // Update position marker to ride terrain
+  // Update position marker
   if (positionMarker) {
-    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, surfaceHeight + 5);
+    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT + 5);
   }
 
   // In photorealistic mode, request scene re-render
@@ -524,8 +396,7 @@ function update() {
   if (currentMode === "overview") {
     if (positionMarker) {
       const pos = interpolatePos(routeProgress);
-      const h = interpolateHeight(routeProgress);
-      positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, h + 5);
+      positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 25);
     }
     handleMovementKeys();
     return;
@@ -675,5 +546,4 @@ export function destroy() {
   positionMarker = null;
   keysDown.clear();
   hasPhotorealistic = false;
-  routeHeights = [];
 }
