@@ -1,0 +1,5 @@
+[    2152ms] ReferenceError: toggleStreetView is not defined
+    at wireEvents (http://localhost:8080/app.js:839:56)
+    at init (http://localhost:8080/app.js:877:3)
+    at http://localhost:8080/app.js:882:1
+[    2207ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8080/favicon.ico:0

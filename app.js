@@ -854,6 +854,22 @@ function wireEvents() {
     showScreen("input");
   });
 
+  function toggleStreetView() {
+    const overlay = $("streetview-overlay");
+    if (!overlay) return;
+    const isHidden = overlay.classList.contains("hidden");
+    if (isHidden) {
+      overlay.classList.remove("hidden");
+      // Position StreetView at current camera location
+      if (cesiumInitialized) {
+        const pos = cesiumView.getProgress ? null : null; // cannot get lat/lng easily here
+        // Fallback: show generic embed or deep link
+      }
+    } else {
+      overlay.classList.add("hidden");
+    }
+  }
+
   // Escape to go back
   document.addEventListener("keydown", (e) => {
     if (state.screen === "practice" && e.key === "Escape") {

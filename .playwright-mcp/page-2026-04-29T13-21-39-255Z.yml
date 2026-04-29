@@ -1,0 +1,37 @@
+- generic [ref=e275]:
+  - generic [ref=e276]:
+    - button "←" [ref=e277] [cursor=pointer]
+    - generic [ref=e278]: Hazard 21 of 23
+    - generic [ref=e279]:
+      - button "🗺 Overview" [ref=e280] [cursor=pointer]
+      - button "🚗 Drive" [ref=e281] [cursor=pointer]
+      - button "🔲 Drive+Map" [ref=e282] [cursor=pointer]
+    - generic [ref=e283]:
+      - button "📱 Pair" [ref=e284] [cursor=pointer]
+      - generic [ref=e285]: Not paired
+      - generic [ref=e286]: "----"
+  - generic [ref=e289]:
+    - generic [ref=e290]:
+      - generic:
+        - generic:
+          - generic: 🚗 -- km/h
+          - generic: "Next hazard: 0 m"
+          - generic: "Progress: 0%"
+          - button "🏙 StreetView" [ref=e296] [cursor=pointer]
+          - button "🔊" [ref=e297] [cursor=pointer]
+          - button "🟢 Calm" [ref=e298] [cursor=pointer]
+        - generic: ⚠ Railway Crossing — Look both ways, listen, and never stop on the tracks.
+        - button "▶ Start Driving" [ref=e317] [cursor=pointer]
+        - generic: A← Look left D→ Look right Space Center view B Brake
+    - generic [ref=e318]:
+      - generic [ref=e319]:
+        - generic [ref=e320]: high
+        - heading "Railway Crossing" [level=2] [ref=e321]
+      - paragraph [ref=e322]: Railway level crossing — trains have right of way.
+      - generic [ref=e323]:
+        - generic [ref=e324]: 💡 What to Watch For
+        - paragraph [ref=e325]: Look both ways, listen, and never stop on the tracks.
+      - paragraph
+      - generic [ref=e326]:
+        - button "← Previous" [ref=e327] [cursor=pointer]
+        - button "Next →" [ref=e328] [cursor=pointer]

@@ -25,7 +25,6 @@ let loopId = null;
 let callbacks = {};
 let positionMarker = null;
 let hasPhotorealistic = false; // true if Google 3D Tiles loaded
-let mirrorViewers = { rear: null, left: null, right: null };
 let leafletMap = null;
 let leafletMarker = null;
 let leafletRoute = null;
@@ -304,12 +303,6 @@ export function setMode(mode) {
     initMiniMap();
   }
 
-  if (inDriveMode) {
-    initMirrors();
-  } else {
-    destroyMirrors();
-  }
-
   if (mode !== "pip" && mode !== "drive") {
     destroyMiniMap();
   }
@@ -359,75 +352,6 @@ function updateDriveCamera() {
   if (hasPhotorealistic && viewer.scene) {
     viewer.scene.requestRender();
   }
-
-  updateMirrors();
-}
-
-/* ═══════════════ MIRRORS ═══════════════ */
-
-async function initMirrors() {
-  const mirrorConfigs = [
-    { id: "mirror-rear", key: "rear", offset: 180 },
-    { id: "mirror-left", key: "left", offset: -90 },
-    { id: "mirror-right", key: "right", offset: 90 }
-  ];
-
-  for (const cfg of mirrorConfigs) {
-    if (mirrorViewers[cfg.key]) continue;
-    const el = document.getElementById(cfg.id);
-    if (!el) continue;
-
-    try {
-      const v = createSatelliteViewer(cfg.id);
-      v.scene.screenSpaceCameraController.enableInputs = false;
-      v.scene.backgroundColor = Cesium.Color.BLACK;
-      
-      // Draw route on mirror too
-      const routeHeight = hasPhotorealistic ? 12 : 3;
-      const positions = routeCoords.map(c => Cesium.Cartesian3.fromDegrees(c.lng, c.lat, routeHeight));
-      v.entities.add({
-        polyline: {
-          positions, width: 4,
-          material: Cesium.Color.fromCssColorString("#00d4aa"),
-          clampToGround: !hasPhotorealistic,
-        },
-      });
-
-      mirrorViewers[cfg.key] = { viewer: v, offset: cfg.offset };
-    } catch (e) {
-      console.warn(`[CesiumView] Failed to init mirror ${cfg.key}:`, e.message);
-    }
-  }
-}
-
-function updateMirrors() {
-  const pos = interpolatePos(routeProgress);
-  const baseHeading = getRouteHeading(routeProgress) + headingOffset;
-
-  for (const key in mirrorViewers) {
-    const m = mirrorViewers[key];
-    if (!m || !m.viewer) continue;
-
-    m.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT),
-      orientation: {
-        heading: Cesium.Math.toRadians((baseHeading + m.offset + 360) % 360),
-        pitch: Cesium.Math.toRadians(-5),
-        roll: 0,
-      },
-    });
-    
-    if (m.viewer.scene) m.viewer.scene.requestRender();
-  }
-}
-
-function destroyMirrors() {
-  for (const key in mirrorViewers) {
-    if (mirrorViewers[key] && mirrorViewers[key].viewer) {
-      mirrorViewers[key].viewer.destroy();
-    }
-  }
-  mirrorViewers = { rear: null, left: null, right: null };
 }
 
 /* ═══════════════ MINI-MAP (PiP) ═══════════════ */
@@ -674,4 +598,5 @@ export function destroy() {
   positionMarker = null;
   keysDown.clear();
   hasPhotorealistic = false;
+  mirrorViewers = { rear: null, left: null, right: null };
 }
