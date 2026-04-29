@@ -9,6 +9,8 @@ if [[ -f .env ]]; then
   NGROK_AUTH_TOKEN="$(grep '^NGROK_AUTH_TOKEN=' .env | sed 's/^NGROK_AUTH_TOKEN=//' | sed 's/^"//;s/"$//' | head -n 1)"
   if [[ -n "$NGROK_AUTH_TOKEN" ]]; then
     export NGROK_AUTHTOKEN="$NGROK_AUTH_TOKEN"
+    echo "Validating and configuring ngrok authtoken..."
+    ngrok config add-authtoken "$NGROK_AUTH_TOKEN" >/dev/null 2>&1 || true
   fi
 fi
 

@@ -417,6 +417,7 @@ let cesiumInitialized = false;
 let currentPracticePass = 1;
 let alertTimeout = null;
 let lastStreetViewUpdate = 0;
+let isNavigating = false;
 
 async function startPractice(index = 0) {
   state.practiceIndex = index;
@@ -693,26 +694,44 @@ function render2DFallback() {
 }
 
 function nextHazard() {
+  console.log("[nextHazard] Called, practiceIndex:", state.practiceIndex, "hazards:", state.hazards.length, "pass:", currentPracticePass);
+  // Guard against re-entrancy during navigation transitions
+  if (isNavigating) {
+    console.log("[nextHazard] Blocked — navigation already in progress");
+    return;
+  }
   try {
     if (state.practiceIndex < state.hazards.length - 1) {
+      console.log("[nextHazard] Advancing to next hazard");
       state.practiceIndex++;
       renderPracticeInfo();
 
       if (currentPracticePass === 1) {
+        console.log("[nextHazard] Rendering pass 1");
         renderReviewPass();
       } else if (currentPracticePass === 2) {
+        console.log("[nextHazard] Rendering pass 2");
         renderStreetViewPass();
       } else if (currentPracticePass === 3) {
+        console.log("[nextHazard] Rendering pass 3, cesiumInitialized:", cesiumInitialized);
         if (cesiumInitialized) cesiumView.jumpToHazard(state.practiceIndex);
         updateStreetViewOverlay("tri-streetview-content");
         updateTriPaneMap();
       }
     } else if (currentPracticePass < 3) {
+      console.log("[nextHazard] Showing settings overlay");
+      // Disable button immediately to prevent double-clicks
+      $("btn-next-hazard").disabled = true;
       // On last hazard — show settings overlay before advancing
       showSettingsOverlay();
+    } else {
+      console.log("[nextHazard] At end of hazards, no next action");
     }
+    console.log("[nextHazard] Completed successfully");
   } catch (e) {
     console.error("Error in nextHazard:", e);
+    isNavigating = false;
+    $("btn-next-hazard").disabled = false;
     showToast("Error advancing to next hazard");
   }
 }
@@ -1161,6 +1180,12 @@ function showSettingsOverlay() {
     document.querySelectorAll(".settings-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.difficulty === current);
     });
+    // Update button text to reflect the next pass
+    const continueBtn = $("btn-settings-continue");
+    if (continueBtn) {
+      const nextPass = currentPracticePass + 1;
+      continueBtn.textContent = `Continue to Pass ${nextPass} →`;
+    }
     overlay.classList.remove("hidden");
   } catch (e) {
     console.error("Error showing settings overlay:", e);
@@ -1184,17 +1209,33 @@ function selectSettingsDifficulty(difficulty) {
 }
 
 function continueFromSettings() {
+  console.log("[continueFromSettings] Called, current pass:", currentPracticePass);
+  // Guard against double-clicks
+  if (isNavigating) {
+    console.log("[continueFromSettings] Blocked — navigation already in progress");
+    return;
+  }
+  isNavigating = true;
   try {
     hideSettingsOverlay();
+    // Reset to first hazard for the new pass
+    state.practiceIndex = 0;
     // Advance from Phase 1 to Phase 2
     if (currentPracticePass === 1) {
+      console.log("[continueFromSettings] Switching to pass 2");
       switchPass(2);
     } else if (currentPracticePass === 2) {
+      console.log("[continueFromSettings] Switching to pass 3");
       switchPass(3);
     }
+    // Update info panel and button state after switching pass
+    renderPracticeInfo();
   } catch (e) {
     console.error("Error continuing from settings:", e);
     showToast("Error advancing to next phase");
+  } finally {
+    // Release guard after a short delay to let rendering settle
+    setTimeout(() => { isNavigating = false; }, 300);
   }
 }
 
