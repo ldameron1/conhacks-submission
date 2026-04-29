@@ -62,6 +62,20 @@ Rich 3D practice is important for demo impact, but open data will not match Goog
 
 Do not mix Google route/map content into an OSM-rendered core map.
 
+## Running the App
+
+```bash
+npm install
+npm start
+```
+
+Then:
+- **Laptop**: open `http://localhost:8080/`
+- **Phone**: open `http://<laptop-ip>:8080/controller.html`
+- In the practice screen, click **📱 Pair** to get a 4-letter room code, enter it on the phone.
+
+The Node.js server (`server.js`) replaces the old `python3 -m http.server` because the phone controller requires a WebSocket relay.
+
 ## Agile Delivery Plan
 
 We will use a short-cycle agile approach built around working demo slices instead of isolated technical tasks.
@@ -79,3 +93,4 @@ The main rule is that the app must stay demoable after every sprint. Live APIs a
 - "Chaos commute" party mode with fictional route events for demo energy.
 - Snowflake-backed aggregate analytics: most confusing exits, reroutes, retries, hesitation points, and completion confidence.
 - Solana-based proof-of-practice badge, only if it can be added cleanly.
+- NHTSA / municipal crash-data overlay for live danger-zone scoring.
