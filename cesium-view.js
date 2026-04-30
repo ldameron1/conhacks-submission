@@ -39,10 +39,10 @@ let lastAlertedHazard = -1;
 
 // Manual drive physics
 let currentSpeed = 0;       // index units per frame
-const ACCEL_RATE = 0.004;   // speed increase per frame when gas held
+const ACCEL_RATE = 0.001;   // speed increase per frame when gas held
 const COAST_DECAY = 0.002;  // speed decrease per frame when no input
-const BRAKE_DECAY = 0.008;  // speed decrease per frame when brake held
-const MAX_SPEED = 0.18;     // max index units per frame
+const BRAKE_DECAY = 0.006;  // speed decrease per frame when brake held
+const MAX_SPEED = 0.10;     // max index units per frame
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -478,21 +478,21 @@ function updateDriveCamera() {
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
   // Photorealistic tiles include real terrain; Toronto ground is ~73m above ellipsoid.
-  // Use 75m so camera sits ~2m above street level (driver eye height). Fallback to 2m for flat satellite.
-  const camHeight = hasPhotorealistic ? 75 : 2;
+  // Use 74.5m so camera sits ~1.5m above street level (driver eye height). Fallback to 1.5m for flat satellite.
+  const camHeight = hasPhotorealistic ? 74.0 : 1.5;
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
-      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -5 : -3),
+      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -1 : -0.5),
       roll: 0,
     },
   });
 
   // Update position marker
   if (positionMarker) {
-    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight + 3);
+    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight + 2);
   }
 
   // In photorealistic mode, request scene re-render
@@ -527,9 +527,9 @@ function initMiniMap() {
   // You marker
   leafletMarker = L.divIcon({
     className: "minimap-marker",
-    html: `<div style="width:12px; height:12px; background:#00d4aa; border:2px solid #fff; border-radius:50%; box-shadow:0 0 10px #00d4aa; transform: rotate(0deg);"><div style="width:2px; height:8px; background:#fff; position:absolute; top:-6px; left:5px;"></div></div>`,
+    html: `<div style="width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:12px solid #00d4aa; filter:drop-shadow(0 0 4px #00d4aa);"></div>`,
     iconSize: [12, 12],
-    iconAnchor: [6, 6]
+    iconAnchor: [6, 10]
   });
   leafletMarker = L.marker([routeCoords[0].lat, routeCoords[0].lng], { icon: leafletMarker }).addTo(leafletMap);
 }
@@ -633,17 +633,22 @@ function handleMovementKeys() {
     }
   }
 
-  // Look left / right (only in drive modes)
+  // Look left / right (only in drive modes) with smooth damping
   if (inDriveMode) {
+    const maxDrift = 45; // max degrees you can look left/right
     if (keysDown.has("arrowleft") || keysDown.has("a")) {
-      headingOffset -= LOOK_SPEED;
+      headingOffset = Math.max(headingOffset - LOOK_SPEED, -maxDrift);
     }
-    if (keysDown.has("arrowright") || keysDown.has("d")) {
-      headingOffset += LOOK_SPEED;
+    else if (keysDown.has("arrowright") || keysDown.has("d")) {
+      headingOffset = Math.min(headingOffset + LOOK_SPEED, maxDrift);
+    }
+    else {
+      // Smooth return to center when not turning
+      headingOffset *= 0.92;
     }
     // Center look (Space)
     if (keysDown.has(" ")) {
-      headingOffset *= 0.85; // smooth reset
+      headingOffset *= 0.85;
     }
   }
 }
@@ -755,6 +760,13 @@ export function setGas(active) {
   const key = "w";
   if (active) keysDown.add(key);
   else keysDown.delete(key);
+}
+
+export function setSteering(value) {
+  // Smooth steering from phone (-1 to 1)
+  const targetOffset = value * 45; // max 45 degrees
+  // Smoothly interpolate to target
+  headingOffset += (targetOffset - headingOffset) * 0.15;
 }
 
 export function destroy() {

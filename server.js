@@ -12,6 +12,7 @@
  * WebSocket is mounted on the same port (upgrade path).
  */
 
+const https = require("https");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -58,16 +59,33 @@ const mimeTypes = {
 
 /* ─────────────── HTTP Static Server ─────────────── */
 
-const server = http.createServer((req, res) => {
+const server = https.createServer({
+  key: fs.readFileSync(path.join(__dirname, "key.pem")),
+  cert: fs.readFileSync(path.join(__dirname, "cert.pem"))
+}, (req, res) => {
   const requestPath = req.url.split("?")[0];
 
   if (requestPath === "/config.js") {
+    // Get LAN IP
+    const interfaces = os.networkInterfaces();
+    let lanIp = "localhost";
+    for (const entries of Object.values(interfaces)) {
+      if (!entries) continue;
+      for (const iface of entries) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          lanIp = iface.address;
+          break;
+        }
+      }
+      if (lanIp !== "localhost") break;
+    }
+    
     const publicConfig = {
       GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
       GOOGLE_MAPS_KEY: process.env.GOOGLE_MAPS_KEY || process.env.GOOGLE_MAPS_API_DEMO_KEY || "",
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || "",
     };
-    const js = `window.__ROUTE_REHEARSAL_CONFIG__ = ${JSON.stringify(publicConfig)};`;
+    const js = `window.__ROUTE_REHEARSAL_CONFIG__ = ${JSON.stringify(publicConfig)}; window.SERVER_LAN_IP = "${lanIp}";`;
     res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
     res.end(js);
     return;
@@ -245,7 +263,7 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '0.0.0.0', () => {
   const boundPort = server.address().port;
   const localhostUrl = `http://localhost:${boundPort}`;
   console.log(`Road Route Rehearsal server running on ${localhostUrl}`);

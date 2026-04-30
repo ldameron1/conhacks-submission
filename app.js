@@ -1677,8 +1677,7 @@ function getControllerUrl() {
   // Try to get LAN IP from server info, fallback to localhost
   const lanIp = window.SERVER_LAN_IP || window.location.hostname;
   const port = window.location.port || '8080';
-  const protocol = window.location.protocol;
-  return `${protocol}//${lanIp}:${port}/controller.html`;
+  return `https://${lanIp}:${port}/controller.html`;
 }
 
 function initPhoneBridge() {
@@ -1713,12 +1712,15 @@ function initPhoneBridge() {
           const qrImg = document.createElement("img");
           qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controllerUrl)}`;
           qrImg.alt = "Scan to open controller";
-          qrImg.style.cssText = "border: 4px solid #fff; border-radius: 8px; background: #fff; display: block; margin: 0 auto;";
+          qrImg.style.cssText = "border: 4px solid #fff; border-radius: 8px; background: #fff; display: inline-block;";
           qrImg.onerror = () => {
             qrEl.innerHTML = `<div style="font-size:11px;color:#94a3b8;padding:8px;">QR code unavailable. Use URL above.</div>`;
           };
+          const spacer = document.createElement("div");
+          spacer.style.cssText = "width: 120px; height: 1px; display: inline-block; visibility: hidden;";
           qrEl.innerHTML = "";
           qrEl.appendChild(qrImg);
+          qrEl.appendChild(spacer);
         }
         break;
       case "controller_connected":
@@ -1771,11 +1773,8 @@ function initPhoneBridge() {
   phoneBridge.startHostRoom();
 
   phoneBridge.onInput((input) => {
-    // Map phone steering (-1..1) to heading offset degrees
-    if (typeof input.steering === "number" && cesiumInitialized) {
-      const maxSteer = 45; // degrees
-      cesiumView.setHeadingOffset(input.steering * maxSteer);
-    }
+    // Phone steering is handled via setSteering (smooth damping in cesium-view)
+    // Don't directly set headingOffset to avoid snap turns
     brakeHeld = !!input.brake;
     gasHeld = !!input.gas;
     state.controllerSignals.left = !!input.signalLeft;
@@ -1786,6 +1785,10 @@ function initPhoneBridge() {
     if (cesiumInitialized) {
       cesiumView.setGas(gasHeld);
       cesiumView.setBrake(brakeHeld);
+      // Send steering input for smooth handling
+      if (typeof input.steering === "number") {
+        cesiumView.setSteering(input.steering);
+      }
     }
   });
 }

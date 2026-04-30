@@ -43,7 +43,7 @@ start_public() {
   if is_port_in_use; then
     echo "Server already running on port $PORT"
   else
-    echo "Starting server on port $PORT..."
+    echo "Starting HTTPS server on port $PORT..."
     cd "$ROOT_DIR"
     node server.js &
     sleep 2
@@ -52,14 +52,14 @@ start_public() {
   LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1 | head -1)
   echo ""
   echo "✓ Server running!"
-  echo "  Laptop: http://localhost:$PORT/"
-  echo "  Phone:  http://$LOCAL_IP:$PORT/controller.html"
+  echo "  Laptop: https://localhost:$PORT/"
+  echo "  Phone:  https://$LOCAL_IP:$PORT/controller.html"
   echo ""
-  echo "Note: Phone must be on same network (use phone hotspot if needed)"
+  echo "Note: Accept certificate warnings on both devices for gyro to work"
   echo ""
   
   if command -v firefox >/dev/null 2>&1; then
-    firefox "http://localhost:$PORT/" >/dev/null 2>&1 &
+    firefox "https://localhost:$PORT/" >/dev/null 2>&1 &
     echo "Opened in Firefox."
   fi
   
