@@ -3,7 +3,7 @@ import * as cesiumView from "./cesium-view.js";
 import * as narration from "./narration.js";
 import * as distractions from "./distractions.js";
 import * as accidentScanner from "./accident-scanner.js";
-import * as phoneBridge from "./phone-bridge.js";
+import * as phoneBridge from "./phone-bridge.js?v=3";
 
 /* ═══════════════════ CONFIG ═══════════════════ */
 const RUNTIME_CONFIG = window.__ROUTE_REHEARSAL_CONFIG__ || {};
@@ -1058,23 +1058,24 @@ function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
   const isStopped = speedKmh < 3;
   if (isStopped) return;
 
-  // Speed-aware refresh:
-  // - Cruising (3-70 km/h): 5s normally, 10s near ramps/roundabouts
-  // - Fast (> 70 km/h): 10s everywhere — view changes rapidly anyway
+  // Speed-aware refresh: faster updates for smoother manual driving feel
+  // - Cruising (3-70 km/h): 1.5s normally, 3s near ramps/roundabouts
+  // - Fast (> 70 km/h): 3s everywhere — view changes rapidly anyway
   const isFast = speedKmh > 70;
-  const baseThrottle = isFast ? 10000 : nearSlow ? 10000 : 5000;
+  const baseThrottle = isFast ? 3000 : nearSlow ? 3000 : 1500;
   const sinceLast = now - lastStreetViewUpdate;
 
   // If we just entered a hazard zone and haven't refreshed recently, force immediate refresh
-  const shouldForce = nearAny && sinceLast > 3000;
+  const shouldForce = nearAny && sinceLast > 1500;
   if (!shouldForce && sinceLast < baseThrottle) return;
 
   // Skip if position / heading barely changed since last refresh (avoids useless reloads)
   const dLat = lat - lastStreetViewLat;
   const dLng = lng - lastStreetViewLng;
   const dH = Math.abs(((heading - lastStreetViewHeading + 540) % 360) - 180);
-  const movedEnough = Math.sqrt(dLat * dLat + dLng * dLng) > 0.00005 || dH > 5;
+  const movedEnough = Math.sqrt(dLat * dLat + dLng * dLng) > 0.00002 || dH > 3;
   if (!movedEnough && !shouldForce) return;
+  console.log("[SV] Refreshing Street View at", lat.toFixed(6), lng.toFixed(6), "heading", Math.round(heading), "speed", speedKmh);
 
   lastStreetViewUpdate = now;
   lastStreetViewLat = lat;
@@ -1099,12 +1100,23 @@ function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
     });
   };
 
+  // Fallback: always fade overlay after 4s even if iframe onload never fires
+  const fallbackTimer = setTimeout(() => {
+    overlay.style.opacity = "0";
+    setTimeout(() => overlay.remove(), 550);
+  }, 4000);
+
+  const wrappedOnLoad = () => {
+    clearTimeout(fallbackTimer);
+    onLoad();
+  };
+
   if (iframe) {
-    iframe.onload = onLoad;
+    iframe.onload = wrappedOnLoad;
     iframe.src = src;
   } else {
     content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy" src="${src}" style="border:0; width:100%; height:100%;"></iframe>`;
-    content.querySelector("iframe").onload = onLoad;
+    content.querySelector("iframe").onload = wrappedOnLoad;
   }
 }
 
@@ -1212,6 +1224,12 @@ function startManualDrive() {
   if (manualDriving) return;
   manualDriving = true;
   state.rehearsal.startTime = state.rehearsal.startTime || Date.now();
+
+  // Reset Street View tracking so first update happens immediately
+  lastStreetViewUpdate = 0;
+  lastStreetViewLat = 0;
+  lastStreetViewLng = 0;
+  lastStreetViewHeading = 0;
 
   // Start distraction audio
   distractions.start();
@@ -1419,9 +1437,16 @@ function resetAppState() {
 function toggleMute() {
   const muted = !narration.isMuted();
   narration.setMuted(muted);
-  const btn = $("btn-mute");
-  btn.textContent = muted ? "🔇" : "🔊";
-  btn.classList.toggle("muted", muted);
+  const btnMute = $("btn-mute");
+  if (btnMute) {
+    btnMute.textContent = muted ? "🔇" : "🔊";
+    btnMute.classList.toggle("muted", muted);
+  }
+  const btnInputMute = $("btn-input-mute");
+  if (btnInputMute) {
+    btnInputMute.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
+    btnInputMute.classList.toggle("muted", muted);
+  }
 }
 
 /* ═══════════════════ DIFFICULTY ═══════════════════ */
@@ -1438,8 +1463,10 @@ function cycleDifficulty() {
   const next = DIFFICULTY_CYCLE[(idx + 1) % DIFFICULTY_CYCLE.length];
   distractions.setDifficulty(next);
   
-  const btn = $("btn-difficulty");
-  btn.textContent = DIFFICULTY_LABELS[next];
+  const btnDiff = $("btn-difficulty");
+  if (btnDiff) btnDiff.textContent = DIFFICULTY_LABELS[next];
+  const btnInputDiff = $("btn-input-difficulty");
+  if (btnInputDiff) btnInputDiff.textContent = DIFFICULTY_LABELS[next];
   
   showToast(`Difficulty: ${DIFFICULTY_LABELS[next]}`);
 }
@@ -1478,8 +1505,10 @@ function selectSettingsDifficulty(difficulty) {
   document.querySelectorAll(".settings-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.difficulty === difficulty);
   });
-  const btn = $("btn-difficulty");
-  if (btn) btn.textContent = DIFFICULTY_LABELS[difficulty];
+  const btnDiff = $("btn-difficulty");
+  if (btnDiff) btnDiff.textContent = DIFFICULTY_LABELS[difficulty];
+  const btnInputDiff = $("btn-input-difficulty");
+  if (btnInputDiff) btnInputDiff.textContent = DIFFICULTY_LABELS[difficulty];
 }
 
 function continueFromSettings() {
@@ -1802,9 +1831,17 @@ function wireEvents() {
     if (e.key === "Enter") startScan();
   });
 
-  // Auto-drive controls
-  $("btn-mute").addEventListener("click", toggleMute);
-  $("btn-difficulty").addEventListener("click", cycleDifficulty);
+  // Auto-drive controls (legacy HUD buttons — may not exist if removed)
+  const btnMute = $("btn-mute");
+  if (btnMute) btnMute.addEventListener("click", toggleMute);
+  const btnDifficulty = $("btn-difficulty");
+  if (btnDifficulty) btnDifficulty.addEventListener("click", cycleDifficulty);
+
+  // Input-screen settings
+  const btnInputMute = $("btn-input-mute");
+  if (btnInputMute) btnInputMute.addEventListener("click", toggleMute);
+  const btnInputDifficulty = $("btn-input-difficulty");
+  if (btnInputDifficulty) btnInputDifficulty.addEventListener("click", cycleDifficulty);
 
   // Phone controller
   const btnPair = $("btn-pair-phone");

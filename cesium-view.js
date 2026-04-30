@@ -227,10 +227,19 @@ export async function initView(containerId, coords, hazards, cbs, options = {}) 
     hazardMarkers.push(entity);
   });
 
-  // Driver position marker (visible in overview mode)
+  // Driver position marker (visible in overview mode) — triangle rotates with heading
+  const triangleSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"%3E%3Cpolygon points="12,2 22,22 2,22" fill="%23ffdd00" stroke="%23000" stroke-width="2"/%3E%3C/svg%3E';
   positionMarker = viewer.entities.add({
     position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, DRIVER_HEIGHT + 5),
-    point: { pixelSize: 18, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 3 },
+    billboard: {
+      image: triangleSvg,
+      scale: 0.7,
+      rotation: new Cesium.CallbackProperty(() => {
+        const h = getRouteHeading(routeProgress);
+        return Cesium.Math.toRadians(-h);
+      }, false),
+      alignedAxis: Cesium.Cartesian3.UNIT_Z,
+    },
     label: {
       text: "▶ YOU",
       font: "bold 12px sans-serif",
@@ -469,15 +478,14 @@ function updateDriveCamera() {
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
   // Photorealistic tiles include real terrain; Toronto ground is ~73m above ellipsoid.
-  // Use ~85m so camera sits ~12m above street level. Fallback to 30m for flat satellite.
-  const camHeight = hasPhotorealistic ? 85 : DRIVER_HEIGHT;
-  console.log("[updateDriveCamera]", pos.lng, pos.lat, camHeight, heading, "photorealistic:", hasPhotorealistic);
+  // Use 76m so camera sits ~3m above street level (driver eye height). Fallback to 30m for flat satellite.
+  const camHeight = hasPhotorealistic ? 76 : DRIVER_HEIGHT;
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
-      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -15 : -5),
+      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -10 : -5),
       roll: 0,
     },
   });

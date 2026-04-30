@@ -706,10 +706,17 @@
       }
       .drive-hud.hidden { display: none; }
       .hud-top {
-        display: flex;
-        justify-content: space-between;
+        position: relative;
         padding: 16px;
+        height: 40px;
       }
+      .hud-pill {
+        position: absolute;
+        top: 16px;
+      }
+      .hud-pill.hud-speed { left: 2%; }
+      .hud-pill.hud-hazard { left: 31%; }
+      .hud-pill.hud-progress { right: 28%; }
       .hud-pill {
         background: rgba(0,0,0,0.7);
         backdrop-filter: blur(12px);
@@ -1345,6 +1352,11 @@
 
         <button id="btn-scan" class="btn-scan">Scan Route for Hazards</button>
 
+        <div class="input-settings" style="display:flex;gap:12px;justify-content:center;margin-top:12px;">
+          <button id="btn-input-mute" class="btn-secondary" style="padding:8px 16px;font-size:13px;flex:1;max-width:140px;" title="Toggle narration">🔊 Sound On</button>
+          <button id="btn-input-difficulty" class="btn-secondary" style="padding:8px 16px;font-size:13px;flex:1;max-width:140px;" title="Cycle difficulty">🟢 Calm</button>
+        </div>
+
         <div class="examples-label">Try an example</div>
         <div id="example-routes"></div>
 
@@ -1471,11 +1483,9 @@
           <!-- Drive HUD overlay (Pass 3 only) -->
           <div id="drive-hud" class="drive-hud hidden">
             <div class="hud-top">
-              <div class="hud-pill">🚗 <span class="val" id="hud-speed">--</span> km/h</div>
-              <div class="hud-pill">Next hazard: <span class="val" id="hud-dist">--</span> m</div>
-              <div class="hud-pill">Progress: <span class="val" id="hud-progress">0</span>%</div>
-              <button id="btn-mute" class="hud-btn" title="Toggle narration">🔊</button>
-              <button id="btn-difficulty" class="hud-btn" title="Cycle difficulty">🟢 Calm</button>
+              <div class="hud-pill hud-speed">🚗 <span class="val" id="hud-speed">--</span> km/h</div>
+              <div class="hud-pill hud-hazard">Next hazard: <span class="val" id="hud-dist">--</span> m</div>
+              <div class="hud-pill hud-progress">Progress: <span class="val" id="hud-progress">0</span>%</div>
             </div>
 
             <div class="hud-alert" id="hud-alert">⚠ Hazard ahead!</div>
@@ -1606,6 +1616,6 @@
     </div>
 
     <script src="./config.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=3"></script>
   </body>
 </html>
