@@ -1148,19 +1148,19 @@ function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
   const isStopped = speedKmh < 3;
   if (isStopped) return;
 
-  // Consistent refresh rate regardless of speed
-  const baseThrottle = 2000; // Update every 2 seconds
+  // Frequent refresh for better immersion (1 second)
+  const baseThrottle = 1000; // Update every 1 second
   const sinceLast = now - lastStreetViewUpdate;
 
   // If we just entered a hazard zone and haven't refreshed recently, force immediate refresh
-  const shouldForce = nearAny && sinceLast > 1500;
+  const shouldForce = nearAny && sinceLast > 800;
   if (!shouldForce && sinceLast < baseThrottle) return;
 
-  // Skip if position / heading barely changed since last refresh (avoids useless reloads)
+  // Lower threshold for movement detection (refresh more often)
   const dLat = lat - lastStreetViewLat;
   const dLng = lng - lastStreetViewLng;
   const dH = Math.abs(((heading - lastStreetViewHeading + 540) % 360) - 180);
-  const movedEnough = Math.sqrt(dLat * dLat + dLng * dLng) > 0.00002 || dH > 3;
+  const movedEnough = Math.sqrt(dLat * dLat + dLng * dLng) > 0.00001 || dH > 2;
   if (!movedEnough && !shouldForce) return;
   console.log("[SV] Refreshing Street View at", lat.toFixed(6), lng.toFixed(6), "heading", Math.round(heading), "speed", speedKmh);
 
