@@ -1,0 +1,13 @@
+{
+  "origin": {
+    "lat": 34.0522,
+    "lng": -118.2437,
+    "label": "Los Angeles, California"
+  },
+  "destination": {
+    "lat": 41.5934,
+    "lng": -87.3464,
+    "label": "Gary, Indiana"
+  },
+  "description": "Epic cross-country drive from LA to Gary, Indiana. Tests long-distance navigation, multiple time zones, and sustained highway driving across diverse terrain."
+}

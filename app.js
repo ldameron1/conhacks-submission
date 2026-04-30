@@ -848,6 +848,11 @@ function updateHUD(data) {
   $("hud-dist").textContent = data.nextHazardDist < 9999 ? data.nextHazardDist : "--";
   if (typeof data.speed === "number") {
     $("hud-speed").textContent = data.speed;
+    
+    // Send speed to phone controller
+    if (phoneBridge.isControllerConnected && phoneBridge.isControllerConnected()) {
+      phoneBridge.sendToController({ type: "host_data", speed: data.speed });
+    }
   }
   // Update completion tracking
   if (data.progress > 0) {
@@ -1646,31 +1651,17 @@ function continueFromSettings() {
 }
 
 /* ═══════════════════ EXAMPLE ROUTES ═══════════════════ */
-const EXAMPLES = [
-  { origin: "CN Tower, Toronto", dest: "Union Station, Toronto" },
-  { origin: "Times Square, New York", dest: "Brooklyn Bridge, New York" },
-];
+const EXAMPLES = [];
 
 function renderExamples() {
-  const container = $("example-routes");
-  EXAMPLES.forEach((ex, idx) => {
-    const chip = document.createElement("button");
-    chip.className = "example-chip";
-    chip.textContent = `${ex.origin.split(",")[0]} → ${ex.dest.split(",")[0]}`;
-    chip.addEventListener("click", () => {
-      loadDemoRoute(`data/demo-routes/cached-example-${idx}.json`);
-    });
-    container.appendChild(chip);
-  });
+  // No live examples - user will type their own routes
 }
 
 /* ═══════════════════ DEMO ROUTES (offline, no API) ═══════════════════ */
 const DEMO_ROUTES = [
-  { file: "data/demo-routes/downtown-garage.json", label: "Downtown Garage" },
-  { file: "data/demo-routes/airport-merge.json", label: "Airport Merge" },
   { file: "data/demo-routes/detroit-niagara.json", label: "🚗 Detroit → Niagara Falls" },
-  { file: "data/demo-routes/desert-crossing.json", label: "🏜️ Desert Crossing (Isolation)" },
   { file: "data/demo-routes/vegas-grandcanyon.json", label: "🎰 Vegas → Grand Canyon" },
+  { file: "data/demo-routes/la-gary.json", label: "🌴 LA → Gary, Indiana" },
 ];
 
 function renderDemoRoutes() {

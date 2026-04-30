@@ -39,10 +39,10 @@ let lastAlertedHazard = -1;
 
 // Manual drive physics
 let currentSpeed = 0;       // index units per frame
-const ACCEL_RATE = 0.00015;  // speed increase per frame when gas held (realistic: ~10s to 60km/h)
-const COAST_DECAY = 0.002;  // speed decrease per frame when no input
-const BRAKE_DECAY = 0.006;  // speed decrease per frame when brake held
-const MAX_SPEED = 0.03;     // max index units per frame (~50 km/h realistic city speed)
+const ACCEL_RATE = 0.00003;  // Much slower acceleration
+const COAST_DECAY = 0.0002;  // Gradual coast
+const BRAKE_DECAY = 0.001;   // Moderate brake
+const MAX_SPEED = 0.0015;    // Much lower max speed to prevent rubber banding
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -80,10 +80,31 @@ function interpolatePos(progress) {
 
 function getRouteHeading(progress) {
   const idx = Math.floor(progress);
+  
+  // Look ahead multiple points for smoother heading (creates wide curve effect)
+  const lookAhead = 10; // Look 10 points ahead for smooth curves
   const a = routeCoords[Math.max(0, idx)];
-  const b = routeCoords[Math.min(routeCoords.length - 1, idx + 1)];
+  const b = routeCoords[Math.min(routeCoords.length - 1, idx + lookAhead)];
+  
   if (a.lat === b.lat && a.lng === b.lng) return 0;
-  return headingBetween(a, b);
+  
+  const targetHeading = headingBetween(a, b);
+  
+  // Smooth heading changes - interpolate towards target
+  if (typeof getRouteHeading.lastHeading === 'undefined') {
+    getRouteHeading.lastHeading = targetHeading;
+  }
+  
+  // Calculate shortest angular distance
+  let diff = targetHeading - getRouteHeading.lastHeading;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  
+  // Smooth interpolation (20% towards target each frame)
+  getRouteHeading.lastHeading += diff * 0.2;
+  getRouteHeading.lastHeading = (getRouteHeading.lastHeading + 360) % 360;
+  
+  return getRouteHeading.lastHeading;
 }
 
 /* ═══════════════ INIT ═══════════════ */
@@ -577,10 +598,10 @@ function initMiniMap() {
   const latLngs = routeCoords.map(c => [c.lat, c.lng]);
   leafletRoute = L.polyline(latLngs, { color: "#00d4aa", weight: 3, opacity: 0.6 }).addTo(leafletMap);
 
-  // Red triangle marker (🔺 style)
+  // Red triangle marker (🔺 style) - explicit styling to override Leaflet defaults
   const triangleIcon = L.divIcon({
-    className: "minimap-marker",
-    html: `<div style="width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:16px solid #ff4466; filter:drop-shadow(0 0 4px #ff4466);"></div>`,
+    className: "", // Empty class to avoid Leaflet's default marker styles
+    html: `<div style="width:0!important; height:0!important; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:16px solid #ff4466; filter:drop-shadow(0 0 4px #ff4466); transform-origin:center bottom;"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 14]
   });
