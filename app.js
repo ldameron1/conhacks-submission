@@ -1,6 +1,6 @@
 import { scanRoute } from "./hazard-scanner.js";
 import * as cesiumView from "./cesium-view.js";
-import * as narration from "./narration.js";
+// import * as narration from "./narration.js"; // Disabled for demo
 import * as distractions from "./distractions.js";
 import * as accidentScanner from "./accident-scanner.js";
 import * as phoneBridge from "./phone-bridge.js?v=3";
@@ -416,8 +416,8 @@ async function startScan() {
     updateScanStep(statusEl, progressEl, `Found ${state.hazards.length} hazard${state.hazards.length !== 1 ? "s" : ""}. Loading report...`, 100);
 
     // Initialize narration and pre-generate audio in background
-    narration.init(CONFIG.ELEVENLABS_API_KEY);
-    narration.pregenerate(state.hazards);
+    // narration.init(CONFIG.ELEVENLABS_API_KEY);
+    // narration.pregenerate(state.hazards);
 
     // Initialize distractions and pre-generate clips in background
     distractions.init(CONFIG.ELEVENLABS_API_KEY);
@@ -781,8 +781,8 @@ function onHazardApproach(hazard, index, dist) {
   alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
 
   // Stop any stale narrations so we don't lag behind the car position, then play
-  narration.stop();
-  narration.playHazard(hazard, index, state.hazards.length);
+  // narration.stop();
+  // narration.playHazard(hazard, index, state.hazards.length);
 
   // Track rehearsal: mark hazard as reviewed
   state.rehearsal.hazardReviewed[index] = true;
@@ -1175,8 +1175,7 @@ function showToast(msg) {
 }
 
 function isNgrokHost() {
-  const host = window.location.hostname || "";
-  return host.includes("ngrok");
+  return false; // Disabled - using hotspot instead
 }
 
 async function copyText(value) {
@@ -1338,7 +1337,7 @@ function updateSignalHUD() {
 /* ═══════════════════ RECAP SCREEN ═══════════════════ */
 function finishRehearsal() {
   stopAutoDrive();
-  narration.stop();
+  // narration.stop();
   distractions.stop();
   cesiumView.destroy();
   cesiumInitialized = false;
@@ -1388,7 +1387,7 @@ function finishRehearsal() {
   });
 
   // Narrate recap
-  narration.playText(`Rehearsal complete. Your confidence score is ${confidence} percent. You reviewed ${reviewed} out of ${total} hazards.`);
+  // narration.playText(`Rehearsal complete. Your confidence score is ${confidence} percent. You reviewed ${reviewed} out of ${total} hazards.`);
 }
 
 function resetRehearsal() {
@@ -1428,7 +1427,7 @@ function resetAppState() {
   cesiumInitialized = false;
   $("input-origin").value = "";
   $("input-dest").value = "";
-  narration.destroy();
+  // narration.destroy();
   distractions.destroy();
   resetSignalHUD();
 }
@@ -1436,7 +1435,7 @@ function resetAppState() {
 /* ═══════════════════ MUTE TOGGLE ═══════════════════ */
 function toggleMute() {
   const muted = !narration.isMuted();
-  narration.setMuted(muted);
+  // narration.setMuted(muted);
   const btnMute = $("btn-mute");
   if (btnMute) {
     btnMute.textContent = muted ? "🔇" : "🔊";
@@ -1597,7 +1596,7 @@ async function loadDemoRoute(file) {
       state.geminiInsights = data.geminiInsights;
       state.excludedHazards = [];
 
-      narration.init(CONFIG.ELEVENLABS_API_KEY);
+      // narration.init(CONFIG.ELEVENLABS_API_KEY);
       distractions.init(CONFIG.ELEVENLABS_API_KEY);
 
       showReport();
@@ -1675,7 +1674,11 @@ async function loadDemoRoute(file) {
 
 /* ═══════════════════ PHONE CONTROLLER ═══════════════════ */
 function getControllerUrl() {
-  return `${window.location.origin}/controller.html`;
+  // Try to get LAN IP from server info, fallback to localhost
+  const lanIp = window.SERVER_LAN_IP || window.location.hostname;
+  const port = window.location.port || '8080';
+  const protocol = window.location.protocol;
+  return `${protocol}//${lanIp}:${port}/controller.html`;
 }
 
 function initPhoneBridge() {
@@ -1692,14 +1695,40 @@ function initPhoneBridge() {
           codeEl.textContent = data;
           codeEl.title = `Open ${getControllerUrl()} and enter room code ${data}`;
         }
-        // Update URL hint too
+        // Update URL hint and QR code
         const hintEl = $("phone-url-hint");
-        if (hintEl) hintEl.textContent = `Phone URL: ${getControllerUrl()}  Code: ${data}`;
+        const qrEl = $("phone-qr-code");
+        const controllerUrl = getControllerUrl();
+        if (hintEl) hintEl.textContent = `Phone URL: ${controllerUrl}  Code: ${data}`;
+        if (qrEl) {
+          qrEl.innerHTML = "";
+          // Generate QR code using qrcode.js library (inline)
+          const canvas = document.createElement("canvas");
+          canvas.width = 150;
+          canvas.height = 150;
+          canvas.style.cssText = "border: 4px solid #fff; border-radius: 8px; background: #fff;";
+          qrEl.appendChild(canvas);
+          
+          // Simple QR code using Google Charts API as fallback
+          const qrImg = document.createElement("img");
+          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controllerUrl)}`;
+          qrImg.alt = "Scan to open controller";
+          qrImg.style.cssText = "border: 4px solid #fff; border-radius: 8px; background: #fff; display: block; margin: 0 auto;";
+          qrImg.onerror = () => {
+            qrEl.innerHTML = `<div style="font-size:11px;color:#94a3b8;padding:8px;">QR code unavailable. Use URL above.</div>`;
+          };
+          qrEl.innerHTML = "";
+          qrEl.appendChild(qrImg);
+        }
         break;
       case "controller_connected":
         badge.textContent = "Phone connected";
         badge.className = "phone-badge connected";
         showToast("Phone controller paired!");
+        const hintEl2 = $("phone-url-hint");
+        const qrEl2 = $("phone-qr-code");
+        if (hintEl2) hintEl2.style.display = "none";
+        if (qrEl2) qrEl2.style.display = "none";
         break;
       case "controller_disconnected":
         badge.textContent = "Phone disconnected";
@@ -1708,6 +1737,10 @@ function initPhoneBridge() {
         brakeHeld = false;
         state.controllerSignals.left = false;
         state.controllerSignals.right = false;
+        const hintEl3 = $("phone-url-hint");
+        const qrEl3 = $("phone-qr-code");
+        if (hintEl3) hintEl3.style.display = "block";
+        if (qrEl3) qrEl3.style.display = "block";
         updateSignalHUD();
         break;
       case "error":
@@ -1881,7 +1914,7 @@ function wireEvents() {
   document.addEventListener("keydown", (e) => {
     if (state.screen === "practice" && e.key === "Escape") {
       stopManualDrive();
-      narration.stop();
+      // narration.stop();
       if (cesiumInitialized && currentPracticePass === 3) {
         // Keep it loaded, just pause
       }

@@ -478,21 +478,21 @@ function updateDriveCamera() {
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
   // Photorealistic tiles include real terrain; Toronto ground is ~73m above ellipsoid.
-  // Use 76m so camera sits ~3m above street level (driver eye height). Fallback to 30m for flat satellite.
-  const camHeight = hasPhotorealistic ? 76 : DRIVER_HEIGHT;
+  // Use 75m so camera sits ~2m above street level (driver eye height). Fallback to 2m for flat satellite.
+  const camHeight = hasPhotorealistic ? 75 : 2;
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
-      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -10 : -5),
+      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -5 : -3),
       roll: 0,
     },
   });
 
   // Update position marker
   if (positionMarker) {
-    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight + 5);
+    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight + 3);
   }
 
   // In photorealistic mode, request scene re-render

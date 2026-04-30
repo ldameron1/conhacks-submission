@@ -40,16 +40,30 @@ start_local() {
 
 start_public() {
   echo ""
-  if ! command -v ngrok >/dev/null 2>&1; then
-    echo "ngrok is not installed or not in PATH."
-    echo "Install it from: https://ngrok.com/download"
-    return
+  if is_port_in_use; then
+    echo "Server already running on port $PORT"
+  else
+    echo "Starting server on port $PORT..."
+    cd "$ROOT_DIR"
+    node server.js &
+    sleep 2
   fi
-  cd "$ROOT_DIR"
-  if ! bash scripts/start-public.sh; then
-    echo "Public mode exited with an error. Returning to menu."
-    echo "Tip: ensure ngrok is authenticated (`ngrok config add-authtoken ...`)."
+  
+  LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1 | head -1)
+  echo ""
+  echo "✓ Server running!"
+  echo "  Laptop: http://localhost:$PORT/"
+  echo "  Phone:  http://$LOCAL_IP:$PORT/controller.html"
+  echo ""
+  echo "Note: Phone must be on same network (use phone hotspot if needed)"
+  echo ""
+  
+  if command -v firefox >/dev/null 2>&1; then
+    firefox "http://localhost:$PORT/" >/dev/null 2>&1 &
+    echo "Opened in Firefox."
   fi
+  
+  read -rp "Press Enter to return to menu..."
 }
 
 show_status() {
@@ -116,6 +130,19 @@ while true; do
   echo "1) Start public mode with ngrok (internet pairing)"
   echo "2) Show server status"
   echo "3) Stop process using port $PORT (aggressive)"
+  echo "4) Exit"
+  read -rp "Choose an option [1-4]: " choice
+
+  case "$choice" in
+    0) start_local ;;
+    1) start_public ;;
+    2) show_status ;;
+    3) stop_port_processes ;;
+    4) echo "Goodbye."; exit 0 ;;
+    *) echo "Invalid option. Please choose 1-4." ;;
+  esac
+done
+ss using port $PORT (aggressive)"
   echo "4) Exit"
   read -rp "Choose an option [1-4]: " choice
 

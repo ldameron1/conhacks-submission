@@ -123,22 +123,18 @@
 
     /* ─── Speedometer ─── */
     .speed-hud {
-      background: var(--surface);
-      border-radius: 14px;
-      padding: 12px 16px;
       display: flex;
       align-items: baseline;
-      justify-content: center;
-      gap: 6px;
+      gap: 4px;
     }
     .speed-value {
-      font-size: 32px;
+      font-size: 20px;
       font-weight: 900;
       color: var(--accent);
       font-variant-numeric: tabular-nums;
     }
     .speed-unit {
-      font-size: 14px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--text2);
     }
@@ -232,22 +228,38 @@
     /* ─── Signals ─── */
     .signals {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
     }
     .signal {
-      padding: 14px;
+      padding: 14px 8px;
       background: var(--surface);
       border: 2px solid var(--border);
       border-radius: 14px;
       text-align: center;
-      font-size: 14px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--text2);
       user-select: none;
     }
     .signal.active-left { border-color: var(--warning); color: var(--warning); background: rgba(255,170,0,0.12); }
     .signal.active-right { border-color: var(--accent2); color: var(--accent2); background: rgba(0,136,255,0.12); }
+    .auto-btn {
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      color: var(--text2);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .auto-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0a0e17;
+    }
 
     .perm-overlay {
       position: fixed;
@@ -326,11 +338,6 @@
       <button id="btn-disconnect" class="disconnect-btn">Disconnect</button>
     </div>
 
-    <div class="speed-hud">
-      <span class="speed-value" id="speed-value">0</span>
-      <span class="speed-unit">km/h</span>
-    </div>
-
     <div class="gyro-hud">
       <div class="gyro-value" id="gyro-value">0&deg;</div>
       <div class="gyro-bar">
@@ -345,6 +352,7 @@
 
     <div class="signals">
       <div id="sig-left" class="signal">&#x2190; Left Signal</div>
+      <button id="btn-auto" class="auto-btn">AUTO</button>
       <div id="sig-right" class="signal">Right Signal &#x2192;</div>
     </div>
 
@@ -466,16 +474,25 @@
 
     /* ═══════ Motion Permission ═══════ */
     function requestMotionPermission() {
+      console.log('DeviceOrientationEvent:', typeof DeviceOrientationEvent);
+      
+      // Try to start listening regardless
+      window.addEventListener('deviceorientation', onOrientation);
+      
       if (typeof DeviceOrientationEvent === 'undefined') {
-        gyroValue.textContent = 'No gyro';
+        gyroValue.textContent = 'Waiting...';
         return;
       }
+      
+      console.log('requestPermission:', typeof DeviceOrientationEvent.requestPermission);
+      
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS - show permission overlay
         permOverlay.classList.add('visible');
       } else {
-        // Android / non-iOS: permission implicit
+        // Android - already listening
         permGranted = true;
-        window.addEventListener('deviceorientation', onOrientation);
+        gyroValue.textContent = '0°';
       }
     }
 
@@ -497,29 +514,37 @@
 
     /* ═══════ Orientation Handling ═══════ */
     function onOrientation(e) {
-      if (!permGranted) return;
+      // Auto-grant permission on first orientation event (Android)
+      if (!permGranted) {
+        permGranted = true;
+        gyroValue.textContent = '0°';
+        // Hide disclaimer when gyro works
+        const disclaimer = document.getElementById('gyro-disclaimer');
+        if (disclaimer) disclaimer.style.display = 'none';
+      }
 
-      // Determine which axis to use based on screen orientation
-      // Portrait: gamma is left/right tilt (steering)
-      // Landscape: beta is left/right tilt (steering)
-      const angle = screen.orientation ? screen.orientation.angle : (window.orientation || 0);
+      // Use gamma (left/right tilt) for steering in portrait mode
+      // Use beta (forward/back tilt) for steering in landscape mode
+      const angle = window.orientation !== undefined ? window.orientation : 
+                    (screen.orientation ? screen.orientation.angle : 0);
       const isLandscape = Math.abs(angle) === 90 || Math.abs(angle) === 270;
 
       let raw;
       if (isLandscape) {
+        // In landscape, use beta (device tilted left/right becomes forward/back)
         raw = e.beta || 0;
-        // In landscape-right (angle = 90 or -270), beta sign is inverted relative to steering direction
-        if (angle === 90 || angle === -270 || angle === 270) {
+        // Adjust sign based on which way landscape is oriented
+        if (angle === -90 || angle === 270) {
           raw = -raw;
         }
       } else {
+        // In portrait, use gamma (left/right tilt)
         raw = e.gamma || 0;
       }
 
-      // Clamp and normalize to -1..1
-      if (raw > 45) raw = 45;
-      if (raw < -45) raw = -45;
-      steering = -raw / 45;  // -1..1
+      // Clamp to ±45 degrees and normalize to -1..1
+      raw = Math.max(-45, Math.min(45, raw));
+      steering = raw / 45;  // Left tilt = negative, right tilt = positive
 
       updateGyroUI();
       maybeSend();
@@ -588,6 +613,21 @@
       const code = roomInput.value.trim();
       if (code.length === 4) connect(code);
       else joinStatus.textContent = 'Enter a 4-letter room code.';
+    });
+
+    roomInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') btnJoin.click();
+    });
+
+    btnDisconnect.addEventListener('click', disconnect);
+
+    // Prevent zoom / double-tap
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('dblclick', (e) => e.preventDefault());
+  </script>
+</body>
+</html>
+ 4-letter room code.';
     });
 
     roomInput.addEventListener('keydown', (e) => {
