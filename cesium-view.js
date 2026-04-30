@@ -599,6 +599,7 @@ function initMiniMap() {
   leafletRoute = L.polyline(latLngs, { color: "#00d4aa", weight: 3, opacity: 0.6 }).addTo(leafletMap);
 
   // Red triangle marker (🔺 style) - explicit styling to override Leaflet defaults
+  // Updated: 2026-04-30 08:36 - Red triangle pointing in direction of travel
   const triangleIcon = L.divIcon({
     className: "", // Empty class to avoid Leaflet's default marker styles
     html: `<div style="width:0!important; height:0!important; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:16px solid #ff4466; filter:drop-shadow(0 0 4px #ff4466); transform-origin:center bottom;"></div>`,
