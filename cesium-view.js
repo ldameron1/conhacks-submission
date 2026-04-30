@@ -39,10 +39,10 @@ let lastAlertedHazard = -1;
 
 // Manual drive physics
 let currentSpeed = 0;       // index units per frame
-const ACCEL_RATE = 0.0006;   // speed increase per frame when gas held (increased)
+const ACCEL_RATE = 0.00015;  // speed increase per frame when gas held (realistic: ~10s to 60km/h)
 const COAST_DECAY = 0.002;  // speed decrease per frame when no input
 const BRAKE_DECAY = 0.006;  // speed decrease per frame when brake held
-const MAX_SPEED = 0.04;     // max index units per frame (~60 km/h speed limit)
+const MAX_SPEED = 0.03;     // max index units per frame (~50 km/h realistic city speed)
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -765,8 +765,8 @@ export function jumpToHazard(index) {
     const d = haversine(c, { lat: h.lat, lng: h.lng });
     if (d < closestDist) { closestDist = d; closestIdx = i; }
   });
-  // Back up a bit so the hazard is ahead of you
-  routeProgress = Math.max(0, closestIdx - 5);
+  // Back up ~100m before the hazard so you can practice approaching it
+  routeProgress = Math.max(0, closestIdx - 50);
   headingOffset = 0;
   currentSpeed = 0;
   lastAlertedHazard = -1;

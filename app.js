@@ -677,10 +677,14 @@ function renderPracticeInfo() {
     $("btn-next-hazard").disabled = false;
     $("btn-next-hazard").textContent = "Next Phase →";
     $("btn-next-hazard").classList.add("next-phase");
+  } else if (isLastHazard && !hasNextPhase) {
+    $("btn-next-hazard").disabled = false;
+    $("btn-next-hazard").textContent = "Finish ✓";
+    $("btn-next-hazard").classList.add("finish-btn");
   } else {
     $("btn-next-hazard").disabled = isLastHazard;
     $("btn-next-hazard").textContent = "Next →";
-    $("btn-next-hazard").classList.remove("next-phase");
+    $("btn-next-hazard").classList.remove("next-phase", "finish-btn");
   }
 }
 
@@ -969,7 +973,8 @@ function nextHazard() {
       // Re-enable button
       setTimeout(() => { $("btn-next-hazard").disabled = false; }, 300);
     } else {
-      console.log("[nextHazard] At end of hazards, no next action");
+      console.log("[nextHazard] At end of all hazards and phases - finishing practice");
+      finishRehearsal();
     }
     console.log("[nextHazard] Completed successfully");
   } catch (e) {
@@ -1187,8 +1192,25 @@ function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
 
   const wrappedOnLoad = () => {
     clearTimeout(fallbackTimer);
+    // Fade out the transition overlay
+    const overlay = content.querySelector('.sv-transition-overlay');
+    if (overlay) {
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 300);
+    }
     onLoad();
   };
+
+  // Add transition overlay
+  if (!content.querySelector('.sv-transition-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sv-transition-overlay';
+    overlay.style.cssText = 'position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,212,170,0.3),rgba(0,136,255,0.3));backdrop-filter:blur(8px);transition:opacity 0.3s;z-index:10;pointer-events:none;';
+    content.appendChild(overlay);
+  } else {
+    // Reset opacity if overlay already exists
+    content.querySelector('.sv-transition-overlay').style.opacity = '1';
+  }
 
   if (iframe) {
     iframe.onload = wrappedOnLoad;
@@ -1627,7 +1649,6 @@ function continueFromSettings() {
 const EXAMPLES = [
   { origin: "CN Tower, Toronto", dest: "Union Station, Toronto" },
   { origin: "Times Square, New York", dest: "Brooklyn Bridge, New York" },
-  { origin: "Golden Gate Bridge, San Francisco", dest: "Fisherman's Wharf, San Francisco" },
 ];
 
 function renderExamples() {
