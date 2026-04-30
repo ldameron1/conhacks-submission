@@ -177,23 +177,22 @@ export function analyzeSteps(steps) {
 /* ───────────────── Lane Strategy Detection ───────────────── */
 
 /**
- * Analyze OSRM lane data to produce a precise human-readable lane description.
- * e.g. "the rightmost left turn lane (middle lane of 3)" instead of just "left lane".
+ * Analyze OSRM lane data to produce a precise, actionable lane recommendation.
+ * Looks at each lane's actual indications (left/straight/right/uturn) and the
+ * upcoming maneuver to recommend the single best lane for what's next.
  */
-function describeLaneAdvice(step, maneuverModifier) {
+function describeLaneAdvice(step, maneuverModifier, nextModifier = "") {
   const intersections = step.intersections;
   if (!intersections || !intersections.length) return null;
   const lanes = intersections[0].lanes;
   if (!lanes || lanes.length === 0) return null;
 
   const total = lanes.length;
-  const validIndices = lanes.map((l, i) => ({ ...l, idx: i })).filter(l => l.valid).map(l => l.idx);
-  if (validIndices.length === 0 || validIndices.length === total) return null;
-
   const modifier = (maneuverModifier || "").toLowerCase();
-  const turnWord = modifier.includes("left") ? "left" : modifier.includes("right") ? "right" : "turn";
+  const nextMod = (nextModifier || "").toLowerCase();
+  const turnWord = modifier.includes("left") ? "left" : modifier.includes("right") ? "right" : "straight";
 
-  // Helper: position label for a single lane index (natural English)
+  // Helper: natural position label
   const posLabel = (idx) => {
     if (total === 1) return "the only lane";
     if (idx === 0) return "the leftmost lane";
@@ -207,66 +206,74 @@ function describeLaneAdvice(step, maneuverModifier) {
     return `lane ${idx + 1} from the left`;
   };
 
-  // Helper: describe a group of contiguous lane indices (e.g., "the 2 rightmost lanes")
-  const groupLabel = (indices) => {
-    if (indices.length === 1) return posLabel(indices[0]);
-    if (indices[0] === 0 && indices[indices.length - 1] === indices.length - 1) {
-      if (indices.length === total) return "all lanes";
-      return `the ${indices.length} leftmost lanes`;
-    }
-    if (indices[indices.length - 1] === total - 1 && indices.length === total - indices[0]) {
-      return `the ${indices.length} rightmost lanes`;
-    }
-    if (indices.length === 2 && indices[1] - indices[0] === 1) {
-      return `${posLabel(indices[0])} or ${posLabel(indices[1])}`;
-    }
-    return indices.map(posLabel).join(" or ");
-  };
+  // What each lane actually does according to its indications
+  const laneInfo = lanes.map((l, i) => {
+    const ind = (l.indications || []).map(s => s.toLowerCase());
+    const doesLeft = ind.includes("left") || ind.includes("sharp left") || ind.includes("slight left") || ind.includes("uturn");
+    const doesRight = ind.includes("right") || ind.includes("sharp right") || ind.includes("slight right");
+    const doesStraight = ind.includes("straight") || ind.includes("none");
+    const action = doesLeft && !doesRight && !doesStraight ? "left-only"
+      : doesRight && !doesLeft && !doesStraight ? "right-only"
+      : doesStraight && !doesLeft && !doesRight ? "straight-only"
+      : "multi";
+    return { idx: i, valid: l.valid, ind, doesLeft, doesRight, doesStraight, action };
+  });
 
-  // Check if valid lanes are turn-dedicated (indications contain the turn direction)
-  const validLanes = validIndices.map(i => lanes[i]);
-  const validIndications = validLanes.flatMap(l => l.indications || []);
-  const isTurnDedicated = validIndications.some(ind => ind.includes(turnWord) || ind.includes("uturn"));
+  // Valid lanes for this maneuver
+  const validLanes = laneInfo.filter(l => l.valid);
+  if (validLanes.length === 0 || validLanes.length === total) return null;
 
-  if (validIndices.length === 1) {
-    const pos = posLabel(validIndices[0]);
-    const laneKind = isTurnDedicated ? `${turnWord} turn lane` : "lane";
-    const label = pos.includes("the ")
-      ? `Get in ${pos} ${laneKind} early`
-      : `Get in ${pos} early`;
-    const description = `You need to ${modifier} in the upcoming maneuver. The correct lane is ${pos} — it is a ${laneKind}.`;
-    const tip = `Position yourself in ${pos} well before the intersection. You won't have time to change lanes last-minute.`;
+  // Pick the best lane: the one whose action best matches BOTH current and next maneuver
+  let bestLane = validLanes[0];
+  let bestScore = -1;
+  for (const vl of validLanes) {
+    let score = 0;
+    // Prefer lanes whose native action matches current maneuver
+    if (turnWord === "left" && vl.doesLeft) score += 3;
+    if (turnWord === "right" && vl.doesRight) score += 3;
+    if (turnWord === "straight" && vl.doesStraight) score += 3;
+    // Bonus if it also sets up for next maneuver
+    if (nextMod.includes("left") && vl.doesLeft) score += 2;
+    if (nextMod.includes("right") && vl.doesRight) score += 2;
+    if (nextMod.includes("straight") && vl.doesStraight) score += 2;
+    // Prefer edge lanes for turns (leftmost for left, rightmost for right)
+    if (turnWord === "left" && vl.idx === 0) score += 1;
+    if (turnWord === "right" && vl.idx === total - 1) score += 1;
+    // Tie-break: prefer middle-ish for straight to keep options open
+    if (turnWord === "straight" && vl.idx > 0 && vl.idx < total - 1) score += 1;
+    if (score > bestScore) {
+      bestScore = score;
+      bestLane = vl;
+    }
+  }
+
+  const bestPos = posLabel(bestLane.idx);
+  const bestAction = bestLane.action === "left-only" ? "left turn" : bestLane.action === "right-only" ? "right turn" : bestLane.action === "straight-only" ? "straight" : "turn";
+
+  if (validLanes.length === 1) {
+    const label = `Get in ${bestPos} early`;
+    const description = `You need to ${modifier}. The only valid lane is ${bestPos} — it's a ${bestAction} lane.`;
+    const tip = `Position yourself in ${bestPos} well before the intersection. You won't have time to change lanes last-minute.`;
     return { label, description, tip };
   }
 
-  // Multiple valid lanes — group contiguous lanes into descriptive clusters
-  const groups = [];
-  let start = 0;
-  for (let i = 1; i <= validIndices.length; i++) {
-    if (i === validIndices.length || validIndices[i] !== validIndices[i - 1] + 1) {
-      groups.push(validIndices.slice(start, i));
-      start = i;
-    }
-  }
-  const groupDesc = groups.map(groupLabel).join(" or ");
-  const laneKind = isTurnDedicated ? `${turnWord} turn lanes` : "valid lanes";
+  // Multiple valid lanes — describe them and explicitly recommend the best one
+  const validDesc = validLanes.map(vl => {
+    const pos = posLabel(vl.idx);
+    const action = vl.action === "left-only" ? "left turn only" : vl.action === "right-only" ? "right turn only" : vl.action === "straight-only" ? "straight only" : "multi-purpose";
+    return `${pos} (${action})`;
+  }).join(", ");
 
-  // Build a concise label: e.g. "Get in one of the 2 rightmost left turn lanes early"
-  let label;
-  if (groups.length === 1 && groups[0].length > 1) {
-    const count = groups[0].length;
-    const side = groups[0][0] === 0 ? "leftmost" : groups[0][groups[0].length - 1] === total - 1 ? "rightmost" : "";
-    if (side) {
-      label = `Get in one of the ${count} ${side} ${laneKind} early`;
-    } else {
-      label = `Get in one of the ${count} ${laneKind} early`;
-    }
-  } else {
-    label = `Get in correct ${laneKind} early`;
+  const label = `Get in ${bestPos} early`;
+  let description = `You need to ${modifier}. The best lane is ${bestPos} — it's a ${bestAction} lane.`;
+  if (validLanes.length > 1) {
+    description += ` Other valid lanes: ${validDesc}.`;
   }
-
-  const description = `You need to ${modifier}. You have ${validIndices.length} valid ${laneKind}: ${groupDesc}. Choose the one that best matches your route.`;
-  const tip = `Move into the correct lane early — you have ${validIndices.length} valid options for this ${modifier}.`;
+  if (nextMod && nextMod !== "straight") {
+    const nextTurn = nextMod.includes("left") ? "left" : nextMod.includes("right") ? "right" : nextMod;
+    description += ` ${bestPos} puts you in the best position for the upcoming ${nextTurn} turn.`;
+  }
+  const tip = `Take ${bestPos} now — ${validLanes.length > 1 ? "don't wait to decide between lanes at the last second" : "it's your only valid option"}.`;
   return { label, description, tip };
 }
 
@@ -298,7 +305,8 @@ export function detectLaneStrategy(steps) {
       const urgency = currDist < 200 ? "high" : "medium";
 
       // Try lane-aware description; fall back to simple left/right
-      const laneAdvice = describeLaneAdvice(next, nextM.modifier);
+      const nextNextMod = steps[i + 2]?.maneuver?.modifier || "";
+      const laneAdvice = describeLaneAdvice(next, nextM.modifier, nextNextMod);
       const side = nextModifier.includes("left") ? "left" : "right";
 
       hazards.push({

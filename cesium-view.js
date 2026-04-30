@@ -188,7 +188,7 @@ export async function initView(containerId, coords, hazards, cbs, options = {}) 
   hazardMarkers = [];
   const typeToEmoji = {
     traffic_signal: "🚦", stop_sign: "🛑", yield_sign: "⚠️",
-    lane_positioning: "🛣️", sharp_turn: "↩️", tunnel: "🚇",
+    lane_positioning: "↔️", sharp_turn: "↩️", tunnel: "🚇",
     merge: "🔀", fork: "🔀", off_ramp: "⬇️", on_ramp: "⬆️",
     roundabout: "🔄", confusing_signage: "🪧", hidden_turn: "👁️",
     railway_crossing: "🚂", pedestrian_crossing: "🚶", unmarked_crossing: "⚠️",

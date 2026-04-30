@@ -157,6 +157,17 @@ function parseElement(el, lat, lon, dist) {
   }
 
   if (tags.tunnel === "yes") {
+    // Skip false tunnel positives: service roads, tracks, very short underpasses without a name,
+    // and anything that looks like a covered road rather than a real tunnel.
+    const highway = tags.highway || "";
+    const isDrivable = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)/.test(highway);
+    const isUnderground = tags.layer === "-1" || tags.location === "underground";
+    const isCoveredPassage = tags.covered === "yes" && !tags.name && !tags.ref;
+    const isServiceTrack = highway === "service" || highway === "track" || highway === "footway" || highway === "cycleway" || highway === "path";
+    // Reject likely false positives unless they are explicitly underground or named
+    if (!isDrivable || isServiceTrack || (isCoveredPassage && !isUnderground)) {
+      return null;
+    }
     return {
       type: "tunnel",
       label: "Tunnel",

@@ -85,6 +85,8 @@ function sortHazardsByRouteProgress(routeCoords, hazards, maxOffRouteM = 60) {
     let bestDist = Infinity;
     let bestProgress = 0;
     let bestOffRoute = Infinity;
+    let bestIsParallelRoad = false;
+    let bestSegLen = 0;
 
     for (let i = 0; i < routeCoords.length - 1; i++) {
       const [lng1, lat1] = routeCoords[i];
@@ -93,26 +95,49 @@ function sortHazardsByRouteProgress(routeCoords, hazards, maxOffRouteM = 60) {
       if (segLen === 0) continue;
 
       // Project h onto segment i→i+1 (treat as 2D, good enough for <1km segments)
-      const t = ((h.lng - lng1) * (lng2 - lng1) + (h.lat - lat1) * (lat2 - lat1)) /
-                ((lng2 - lng1) ** 2 + (lat2 - lat1) ** 2);
+      const segDx = lng2 - lng1;
+      const segDy = lat2 - lat1;
+      const t = ((h.lng - lng1) * segDx + (h.lat - lat1) * segDy) /
+                (segDx ** 2 + segDy ** 2);
       const clampedT = Math.max(0, Math.min(1, t));
-      const projLng = lng1 + clampedT * (lng2 - lng1);
-      const projLat = lat1 + clampedT * (lat2 - lat1);
+      const projLng = lng1 + clampedT * segDx;
+      const projLat = lat1 + clampedT * segDy;
       const offRoute = haversineDistance(h.lat, h.lng, projLat, projLng);
       const progress = cumDist[i] + clampedT * segLen;
+
+      // Detect parallel roads in grid-style areas:
+      // If the off-route displacement is nearly parallel to the segment,
+      // the hazard is likely on a parallel street running alongside.
+      const offDx = h.lng - projLng;
+      const offDy = h.lat - projLat;
+      const offLen = Math.sqrt(offDx * offDx + offDy * offDy) || 1;
+      const segLenCart = Math.sqrt(segDx * segDx + segDy * segDy) || 1;
+      // sin(angle) between segment and off-route vector: 0 = parallel, 1 = perpendicular
+      const sinAngle = Math.abs((segDx * offDy - segDy * offDx) / (segLenCart * offLen));
+      // On long segments (>20m), if off-route > 15m and displacement is nearly parallel
+      // to the road (sinAngle < 0.5 => angle < 30°), it's likely a parallel road
+      const isParallelRoad = segLen > 20 && offRoute > 15 && sinAngle < 0.5;
 
       if (offRoute < bestOffRoute) {
         bestOffRoute = offRoute;
         bestProgress = progress;
+        bestIsParallelRoad = isParallelRoad;
+        bestSegLen = segLen;
       }
     }
 
-    return { h, progress: bestProgress, offRoute: bestOffRoute };
+    return { h, progress: bestProgress, offRoute: bestOffRoute, isParallelRoad: bestIsParallelRoad, segLen: bestSegLen };
   });
 
   // Filter and sort A→B
   const filtered = projected
-    .filter((p) => p.offRoute <= maxOffRouteM && p.progress >= 0 && p.progress <= totalDist + 50)
+    .filter((p) => {
+      if (p.offRoute > maxOffRouteM) return false;
+      if (p.progress < 0 || p.progress > totalDist + 50) return false;
+      // Reject hazards that sit on parallel roads in grid-style street networks
+      if (p.isParallelRoad) return false;
+      return true;
+    })
     .sort((a, b) => a.progress - b.progress)
     .map((p) => p.h);
 
@@ -195,7 +220,7 @@ function getHazardEmoji(h) {
     case "traffic_signal": return "🚦";
     case "stop_sign": return "🛑";
     case "yield_sign": return "⚠️";
-    case "lane_positioning": return "🛣️";
+    case "lane_positioning": return "↔️";
     case "sharp_turn": return "↩️";
     case "tunnel": return "🚇";
     case "merge": return "🔀";
@@ -382,7 +407,7 @@ async function startScan() {
 
     // Step 6: Strictly order hazards A→B along route, drop off-route ones
     updateScanStep(statusEl, progressEl, "Ordering hazards along route...", 90);
-    state.hazards = sortHazardsByRouteProgress(state.routeCoords, state.hazards, 60);
+    state.hazards = sortHazardsByRouteProgress(state.routeCoords, state.hazards, 30);
     state.hazardSummary.total = state.hazards.length;
     await sleep(200);
 
@@ -711,8 +736,20 @@ function updateStreetViewOverlay(containerId = "streetview-content") {
   const lng = h.lng;
 
   try {
-    const heading = h.heading || 0;
-    const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${heading},0,0,0&output=svembed`;
+    // Compute heading from the direction you approach the hazard along the route
+    // (looks back along the route so the driver sees what's ahead of them)
+    let heading = h.heading || 0;
+    const routeIdx = state.hazards[state.practiceIndex]?.coordIndex ?? 0;
+    if (state.routeCoords && routeIdx > 0 && routeIdx < state.routeCoords.length) {
+      const prev = state.routeCoords[routeIdx - 1] || state.routeCoords[0];
+      const curr = state.routeCoords[routeIdx] || prev;
+      const dLng = curr[0] - prev[0];
+      const dLat = curr[1] - prev[1];
+      if (dLng !== 0 || dLat !== 0) {
+        heading = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+      }
+    }
+    const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${Math.round(heading)},0,0,0&output=svembed`;
     content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy"
       src="${src}"
       style="border:0; width:100%; height:100%;"></iframe>`;
@@ -949,7 +986,49 @@ function isNearHazard(lat, lng, progress) {
   return { nearAny, nearSlow };
 }
 
-function updateTriPaneStreetViewFromProgress(progress) {
+function segmentHeading(fromIdx, toIdx) {
+  const a = state.routeCoords[fromIdx] || state.routeCoords[0];
+  const b = state.routeCoords[toIdx] || a;
+  const dLng = b[0] - a[0];
+  const dLat = b[1] - a[1];
+  return (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+}
+
+/**
+ * Compute a heading that looks toward the upcoming maneuver so drivers see
+ * what's coming, not just what's behind them.
+ */
+function computeLookAheadHeading(progress) {
+  const maxIdx = state.routeCoords.length - 1;
+  const idx = Math.floor(Math.max(0, Math.min(progress, maxIdx)));
+  const frac = progress - idx;
+
+  // Current segment heading
+  const currentH = segmentHeading(idx, Math.min(maxIdx, idx + 1));
+
+  // Look ahead for next hazard/turn within 300m and blend toward its heading
+  const LOOKAHEAD_M = 300;
+  const coords = state.routeCoords;
+  let lookaheadH = currentH;
+  let lookaheadDist = 0;
+  for (let i = idx + 1; i < maxIdx && lookaheadDist < LOOKAHEAD_M; i++) {
+    lookaheadDist += haversineDistance(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+    if (lookaheadDist >= 50) { // at least a bit ahead
+      lookaheadH = segmentHeading(i, Math.min(maxIdx, i + 1));
+      break;
+    }
+  }
+
+  // Blend: more weight to lookahead as we get closer to the turn
+  const blend = Math.min(1, Math.max(0, 1 - lookaheadDist / LOOKAHEAD_M));
+  // Shortest-path interpolation for angles
+  let diff = ((lookaheadH - currentH + 540) % 360) - 180;
+  return (currentH + diff * blend + 360) % 360;
+}
+
+let lastStreetViewLat = 0, lastStreetViewLng = 0, lastStreetViewHeading = 0;
+
+function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
   const now = Date.now();
   const maxProgress = state.routeCoords.length - 1;
   const idx = Math.floor(Math.max(0, Math.min(progress, maxProgress)));
@@ -960,36 +1039,51 @@ function updateTriPaneStreetViewFromProgress(progress) {
   const lng = c1[0] + (c2[0] - c1[0]) * frac;
 
   const { nearAny, nearSlow } = isNearHazard(lat, lng, progress);
+  const heading = computeLookAheadHeading(progress);
 
-  // Smart refresh: 5s normally, 10s near ramps/roundabouts (same view persists longer),
-  // immediate when first entering a hazard zone
-  const baseThrottle = nearSlow ? 10000 : 5000;
+  // Skip refresh entirely when stopped — no point reloading the same view
+  const isStopped = speedKmh < 3;
+  if (isStopped) return;
+
+  // Speed-aware refresh:
+  // - Cruising (3-70 km/h): 5s normally, 10s near ramps/roundabouts
+  // - Fast (> 70 km/h): 10s everywhere — view changes rapidly anyway
+  const isFast = speedKmh > 70;
+  const baseThrottle = isFast ? 10000 : nearSlow ? 10000 : 5000;
   const sinceLast = now - lastStreetViewUpdate;
 
   // If we just entered a hazard zone and haven't refreshed recently, force immediate refresh
   const shouldForce = nearAny && sinceLast > 3000;
   if (!shouldForce && sinceLast < baseThrottle) return;
 
+  // Skip if position / heading barely changed since last refresh (avoids useless reloads)
+  const dLat = lat - lastStreetViewLat;
+  const dLng = lng - lastStreetViewLng;
+  const dH = Math.abs(((heading - lastStreetViewHeading + 540) % 360) - 180);
+  const movedEnough = Math.sqrt(dLat * dLat + dLng * dLng) > 0.00005 || dH > 5;
+  if (!movedEnough && !shouldForce) return;
+
   lastStreetViewUpdate = now;
+  lastStreetViewLat = lat;
+  lastStreetViewLng = lng;
+  lastStreetViewHeading = heading;
 
   const content = $("tri-streetview-content");
   if (!content) return;
 
-  const dLng = c2[0] - c1[0];
-  const dLat = c2[1] - c1[1];
-  const heading = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
-
   const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${Math.round(heading)},0,0,0&output=svembed`;
 
-  // Add blur overlay to prevent epileptic flash during iframe swap
-  const blurOverlay = document.createElement("div");
-  blurOverlay.style.cssText = "position:absolute;inset:0;backdrop-filter:blur(8px);background:rgba(0,0,0,0.35);z-index:10;transition:opacity 0.3s;pointer-events:none;";
-  content.appendChild(blurOverlay);
+  // Solid black overlay to completely hide the iframe white-flash during reload
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:absolute;inset:0;background:#000;z-index:10;opacity:1;transition:opacity 0.5s ease-out;pointer-events:none;";
+  content.appendChild(overlay);
 
   const iframe = content.querySelector("iframe");
   const onLoad = () => {
-    blurOverlay.style.opacity = "0";
-    setTimeout(() => blurOverlay.remove(), 350);
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "0";
+      setTimeout(() => overlay.remove(), 550);
+    });
   };
 
   if (iframe) {
@@ -1121,6 +1215,7 @@ function startManualDrive() {
     }
 
     const maxProgress = state.routeCoords.length - 1;
+    const speedKmh = Math.round(manualDriveSpeed * 400 * 60);
 
     if (cesiumInitialized) {
       const progress = cesiumView.getProgress();
@@ -1134,7 +1229,7 @@ function startManualDrive() {
       // Let cesium-view handle its own physics; we just sync progress for external updates
       cesiumView.setProgress(progress + manualDriveSpeed);
       state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
-      updateTriPaneStreetViewFromProgress(progress);
+      updateTriPaneStreetViewFromProgress(progress, speedKmh);
       updateTriPaneMapFromProgress(progress);
     } else if (state.practiceMap && fallbackVehicle) {
       // 2D fallback: interpolate along routeCoords
@@ -1156,12 +1251,11 @@ function startManualDrive() {
       state.practiceMap.panTo([lat, lng]);
 
       state.rehearsal.routeCompletion = Math.round((fallbackProgress / maxProgress) * 100);
-      updateTriPaneStreetViewFromProgress(fallbackProgress);
+      updateTriPaneStreetViewFromProgress(fallbackProgress, speedKmh);
       updateTriPaneMapFromProgress(fallbackProgress);
     }
 
     // Update speed display (approx km/h)
-    const speedKmh = Math.round(manualDriveSpeed * 400 * 60);
     const speedEl = $("hud-speed");
     if (speedEl) speedEl.textContent = speedKmh;
 
