@@ -367,7 +367,7 @@ async function analyzeWithOpenRouter(prompt) {
   return null;
 }
 
-/* ═══════════════════ ROUTE SAVE/LOAD ═══════════════════ */
+/* ═══════════════════ ROUTE SAVE/LOAD (COMMENTED OUT) ═══════════════════
 function saveRoute() {
   const routeData = {
     isCachedState: true,
@@ -397,6 +397,7 @@ function loadRouteFromFile() {
   const input = $("file-load-route");
   input.click();
 }
+*/
 
 /* ═══════════════════ SCANNING FLOW ═══════════════════ */
 async function startScan() {
@@ -1147,11 +1148,8 @@ function updateTriPaneStreetViewFromProgress(progress, speedKmh = 0) {
   const isStopped = speedKmh < 3;
   if (isStopped) return;
 
-  // Speed-aware refresh: faster updates for smoother manual driving feel
-  // - Cruising (3-70 km/h): 1.5s normally, 3s near ramps/roundabouts
-  // - Fast (> 70 km/h): 3s everywhere — view changes rapidly anyway
-  const isFast = speedKmh > 70;
-  const baseThrottle = isFast ? 3000 : nearSlow ? 3000 : 1500;
+  // Consistent refresh rate regardless of speed
+  const baseThrottle = 2000; // Update every 2 seconds
   const sinceLast = now - lastStreetViewUpdate;
 
   // If we just entered a hazard zone and haven't refreshed recently, force immediate refresh
@@ -1933,6 +1931,7 @@ function wireEvents() {
     resetAppState();
     showScreen("input");
   });
+  /* Save/Load feature commented out
   $("btn-save-route").addEventListener("click", saveRoute);
   $("btn-load-route").addEventListener("click", loadRouteFromFile);
   
@@ -1950,6 +1949,7 @@ function wireEvents() {
       showToast('Failed to load route: ' + err.message);
     }
   });
+  */
 
   // Mode toggle buttons
   document.querySelectorAll(".mode-btn").forEach(btn => {
