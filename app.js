@@ -773,12 +773,12 @@ function updateHUD(data) {
 }
 
 function onHazardApproach(hazard, index, dist) {
-  // Show alert banner
-  const alert = $("hud-alert");
-  alert.textContent = `⚠ ${hazard.label} — ${hazard.tip}`;
-  alert.classList.add("visible");
-  clearTimeout(alertTimeout);
-  alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
+  // Show alert banner (DISABLED - annoying)
+  // const alert = $("hud-alert");
+  // alert.textContent = `⚠ ${hazard.label} — ${hazard.tip}`;
+  // alert.classList.add("visible");
+  // clearTimeout(alertTimeout);
+  // alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
 
   // Stop any stale narrations so we don't lag behind the car position, then play
   // narration.stop();

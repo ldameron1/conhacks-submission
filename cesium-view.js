@@ -39,10 +39,10 @@ let lastAlertedHazard = -1;
 
 // Manual drive physics
 let currentSpeed = 0;       // index units per frame
-const ACCEL_RATE = 0.001;   // speed increase per frame when gas held
+const ACCEL_RATE = 0.0002;   // speed increase per frame when gas held
 const COAST_DECAY = 0.002;  // speed decrease per frame when no input
 const BRAKE_DECAY = 0.006;  // speed decrease per frame when brake held
-const MAX_SPEED = 0.10;     // max index units per frame
+const MAX_SPEED = 0.02;     // max index units per frame
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -473,19 +473,61 @@ function flyToOverview() {
 
 /* ═══════════════ DRIVE CAMERA ═══════════════ */
 
+// Terrain offset cache
+let terrainOffset = 1.5; // Default fallback
+let terrainCalibrated = false;
+let calibrationEntity = null;
+
+function calibrateTerrainOffset() {
+  if (!viewer || terrainCalibrated) return;
+  
+  const pos = interpolatePos(routeProgress);
+  
+  // Create invisible entity clamped to ground
+  calibrationEntity = viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 0),
+    point: {
+      pixelSize: 1,
+      color: Cesium.Color.TRANSPARENT,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  });
+  
+  // Wait for tiles to load and entity to clamp
+  setTimeout(() => {
+    if (calibrationEntity && calibrationEntity.position) {
+      const clampedPos = calibrationEntity.position.getValue(Cesium.JulianDate.now());
+      if (clampedPos) {
+        const cartographic = Cesium.Cartographic.fromCartesian(clampedPos);
+        terrainOffset = cartographic.height + 1.5; // 1.5m above ground
+        terrainCalibrated = true;
+        console.log(`[Terrain] Calibrated to ${terrainOffset.toFixed(2)}m at (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`);
+        
+        // Clean up
+        viewer.entities.remove(calibrationEntity);
+        calibrationEntity = null;
+      }
+    }
+  }, 2000); // Wait 2 seconds for tiles to load
+}
+
 function updateDriveCamera() {
   if (!viewer) return;
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
-  // Photorealistic tiles include real terrain; Toronto ground is ~73m above ellipsoid.
-  // Use 74.5m so camera sits ~1.5m above street level (driver eye height). Fallback to 1.5m for flat satellite.
-  const camHeight = hasPhotorealistic ? 74.0 : 1.5;
+  
+  // Trigger calibration on first frame
+  if (!terrainCalibrated && !calibrationEntity) {
+    calibrateTerrainOffset();
+  }
+  
+  const camHeight = terrainOffset;
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
-      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -1 : -0.5),
+      pitch: Cesium.Math.toRadians(-1),
       roll: 0,
     },
   });
@@ -620,7 +662,11 @@ function handleMovementKeys() {
 
   if (inDriveMode) {
     if (gasHeld) {
-      currentSpeed = Math.min(currentSpeed + ACCEL_RATE, MAX_SPEED);
+      // Non-linear acceleration: faster at low speeds, tapers off at high speeds
+      const speedRatio = Math.abs(currentSpeed) / MAX_SPEED;
+      const accelMultiplier = 1.0 - (speedRatio * 0.7); // 100% at 0 speed, 30% at max speed
+      const effectiveAccel = ACCEL_RATE * accelMultiplier;
+      currentSpeed = Math.min(currentSpeed + effectiveAccel, MAX_SPEED);
     } else if (brakeHeld) {
       currentSpeed = Math.max(currentSpeed - BRAKE_DECAY, -MAX_SPEED * 0.5);
     } else {

@@ -330,16 +330,16 @@
 
   <!-- Controller Screen -->
   <div id="ctrl-screen" class="ctrl-screen">
-    <div class="top-bar">
+    <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <div class="room-label">Room</div>
         <div class="room-code" id="room-code">----</div>
       </div>
+      <div style="font-size: 16px; color: var(--accent); font-weight: 800;" id="speed-display">0 km/h</div>
       <button id="btn-disconnect" class="disconnect-btn">Disconnect</button>
     </div>
 
     <div class="gyro-hud">
-      <div style="font-size: 14px; color: var(--accent); font-weight: 700; margin-bottom: 4px;" id="speed-display">0 km/h</div>
       <div class="gyro-value" id="gyro-value">0&deg;</div>
       <div class="gyro-bar">
         <div class="gyro-fill" id="gyro-fill"></div>
@@ -444,9 +444,9 @@
         } else if (data.type === 'error') {
           joinStatus.textContent = data.message;
           joinStatus.className = 'status-msg error';
-        } else if (data.type === 'host_data' && data.payload) {
-          if (typeof data.payload.speed === 'number' && speedValue) {
-            speedValue.textContent = data.payload.speed;
+        } else if (data.type === 'host_data') {
+          if (typeof data.speed === 'number' && speedValue) {
+            speedValue.textContent = data.speed + ' km/h';
           }
         }
       };
