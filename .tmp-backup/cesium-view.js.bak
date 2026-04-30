@@ -474,40 +474,129 @@ function flyToOverview() {
 /* ═══════════════ DRIVE CAMERA ═══════════════ */
 
 // Terrain offset cache
-let terrainOffset = 1.5; // Default fallback
+let terrainOffset = 73.2; // Default for Toronto
 let terrainCalibrated = false;
-let calibrationEntity = null;
+let calibrationInProgress = false;
+
+async function testLocationCalibration(lat, lng, name) {
+  return new Promise((resolve) => {
+    // Create entity clamped to ground
+    const entity = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+      point: {
+        pixelSize: 1,
+        color: Cesium.Color.TRANSPARENT,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+      }
+    });
+    
+    // Wait 10 seconds for tiles to load
+    setTimeout(() => {
+      let clampedHeight = null;
+      let raycastHeight = null;
+      
+      // Get clamped height
+      if (entity && entity.position) {
+        const clampedPos = entity.position.getValue(Cesium.JulianDate.now());
+        if (clampedPos) {
+          const cartographic = Cesium.Cartographic.fromCartesian(clampedPos);
+          clampedHeight = cartographic.height;
+        }
+      }
+      
+      // Try raycast from above
+      const highPosition = Cesium.Cartesian3.fromDegrees(lng, lat, 500);
+      const windowPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, highPosition);
+      if (windowPos) {
+        const pickedPosition = viewer.scene.pickPosition(windowPos);
+        if (pickedPosition) {
+          const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedPosition);
+          raycastHeight = pickedCartographic.height;
+        }
+      }
+      
+      // Clean up
+      viewer.entities.remove(entity);
+      
+      const result = {
+        name,
+        lat,
+        lng,
+        clampedHeight,
+        raycastHeight,
+        offset: (clampedHeight && raycastHeight) ? (raycastHeight - clampedHeight) : null
+      };
+      
+      console.log(`[Terrain Test] ${name}: clamped=${clampedHeight?.toFixed(2)}m, raycast=${raycastHeight?.toFixed(2)}m, offset=${result.offset?.toFixed(2)}m`);
+      resolve(result);
+    }, 10000);
+  });
+}
+
+async function runTerrainCalibrationTest() {
+  if (calibrationInProgress || !viewer) return;
+  calibrationInProgress = true;
+  
+  const testLocations = [
+    { name: 'Toronto', lat: 43.6532, lng: -79.3832 },
+    { name: 'New York', lat: 40.7580, lng: -73.9855 },
+    { name: 'Los Angeles', lat: 34.0522, lng: -118.2437 },
+    { name: 'Chicago', lat: 41.8781, lng: -87.6298 },
+    { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+    { name: 'London', lat: 51.5074, lng: -0.1278 },
+    { name: 'Paris', lat: 48.8566, lng: 2.3522 },
+    { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
+    { name: 'Sydney', lat: -33.8688, lng: 151.2093 },
+    { name: 'Dubai', lat: 25.2048, lng: 55.2708 }
+  ];
+  
+  console.log('[Terrain Test] Starting background calibration test (10 locations × 10 seconds = ~100 seconds)...');
+  const results = [];
+  
+  for (const loc of testLocations) {
+    const result = await testLocationCalibration(loc.lat, loc.lng, loc.name);
+    results.push(result);
+  }
+  
+  // Calculate statistics
+  const validOffsets = results.filter(r => r.offset !== null).map(r => r.offset);
+  if (validOffsets.length > 0) {
+    const avgOffset = validOffsets.reduce((sum, o) => sum + o, 0) / validOffsets.length;
+    const minOffset = Math.min(...validOffsets);
+    const maxOffset = Math.max(...validOffsets);
+    
+    console.log('[Terrain Test] ===== RESULTS =====');
+    console.log(`[Terrain Test] Valid samples: ${validOffsets.length}/${results.length}`);
+    console.log(`[Terrain Test] Average offset: ${avgOffset.toFixed(2)}m`);
+    console.log(`[Terrain Test] Range: ${minOffset.toFixed(2)}m to ${maxOffset.toFixed(2)}m`);
+    console.log(`[Terrain Test] Std dev: ${Math.sqrt(validOffsets.reduce((sum, o) => sum + Math.pow(o - avgOffset, 2), 0) / validOffsets.length).toFixed(2)}m`);
+    
+    if (Math.abs(maxOffset - minOffset) < 5) {
+      console.log(`[Terrain Test] ✓ Offset is consistent! Using average: ${avgOffset.toFixed(2)}m`);
+      window.TERRAIN_OFFSET = avgOffset;
+    } else {
+      console.log(`[Terrain Test] ✗ Offset varies too much. May need per-city calibration.`);
+    }
+  }
+  
+  calibrationInProgress = false;
+  return results;
+}
 
 function calibrateTerrainOffset() {
   if (!viewer || terrainCalibrated) return;
   
   const pos = interpolatePos(routeProgress);
+  terrainOffset = 73.2;
+  terrainCalibrated = true;
   
-  // Create invisible entity clamped to ground
-  calibrationEntity = viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 0),
-    point: {
-      pixelSize: 1,
-      color: Cesium.Color.TRANSPARENT,
-      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-    }
-  });
+  console.log(`[Terrain] Using Toronto baseline: ${terrainOffset.toFixed(2)}m`);
   
-  // Wait for tiles to load and entity to clamp
-  setTimeout(() => {
-    if (calibrationEntity && calibrationEntity.position) {
-      const clampedPos = calibrationEntity.position.getValue(Cesium.JulianDate.now());
-      if (clampedPos) {
-        const cartographic = Cesium.Cartographic.fromCartesian(clampedPos);
-        terrainOffset = cartographic.height + 1.5; // 1.5m above ground
-        terrainCalibrated = true;
-        console.log(`[Terrain] Calibrated to ${terrainOffset.toFixed(2)}m at (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`);
-        
-        // Clean up
-        viewer.entities.remove(calibrationEntity);
-        calibrationEntity = null;
-      }
-    }
+  // Start background test
+  if (hasPhotorealistic && !calibrationInProgress) {
+    setTimeout(() => runTerrainCalibrationTest(), 5000);
+  }
+}
   }, 2000); // Wait 2 seconds for tiles to load
 }
 
@@ -516,19 +605,13 @@ function updateDriveCamera() {
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
   
-  // Get ground height using scene.clampToHeight (works globally!)
-  let groundHeight = 0;
-  if (hasPhotorealistic && viewer.scene) {
-    const testPosition = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 0);
-    const clamped = viewer.scene.clampToHeight(testPosition);
-    if (clamped) {
-      const cartographic = Cesium.Cartographic.fromCartesian(clamped);
-      groundHeight = cartographic.height;
-    }
+  // Trigger calibration on first frame
+  if (!terrainCalibrated && !calibrationEntity) {
+    calibrateTerrainOffset();
+  }
   }
   
-  // Camera at eye level (1.5m above ground)
-  const camHeight = groundHeight + 1.5;
+  const camHeight = terrainOffset;
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
@@ -801,6 +884,10 @@ export function setHeadingOffset(val) {
 
 export function getHeadingOffset() {
   return headingOffset;
+}
+
+export function testTerrain() {
+  return runTerrainCalibrationTest();
 }
 
 export function setBrake(active) {
