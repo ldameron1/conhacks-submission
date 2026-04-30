@@ -29,7 +29,7 @@ On the backend, a minimal Node.js server paired with the `ws` library and an `ng
 |---|---|---|
 | **App Server** | Node.js + built-in `http` module | Serves static files and injects runtime `/config.js` with API keys |
 | **WebSocket Relay** | [`ws` 8.x](https://github.com/websockets/ws) (only npm dependency) | Real-time phone ↔ laptop pairing via 4-letter room codes |
-| **Public Tunneling** | [ngrok](https://ngrok.com) | HTTPS tunnel for phone controller over the internet (`--scheme=https`) |
+| **Public Tunneling** | [ngrok](https://ngrok.com) | HTTPS tunnel for phone controller over the internet |
 
 ### APIs & Data Services
 | API | Module | Purpose |
@@ -61,7 +61,7 @@ On the backend, a minimal Node.js server paired with the `ws` library and an `ng
 ### Developer Tooling
 | Tool | Usage |
 |---|---|
-| `npm run startup` | Interactive menu — local mode, ngrok public mode, status, cleanup |
+| `npm run startup` | Interactive menu — ngrok public mode, status, cleanup, exit |
 | `npm run smoke` | Validates config.js injection, ws/wss protocol logic, and key file integrity |
 | `scripts/connect-ccsecure.sh` | WPA2-Enterprise Wi-Fi config for hackathon venue (NetworkManager/PEAP) |
 
@@ -84,10 +84,10 @@ npm run startup
 ```
 
 This opens an interactive startup menu:
-1. **Local mode** — laptop + phone on same Wi-Fi
-2. **Public mode** — ngrok HTTPS tunnel for internet pairing
-3. **Status** — check if server is running
-4. **Stop** — aggressively kill processes on port 8080
+1. **Public mode** — ngrok HTTPS tunnel for internet pairing
+2. **Status** — check if server is running
+3. **Stop** — aggressively kill processes on port 8080
+4. **Exit** — close the startup menu
 
 Then:
 - **Laptop**: open `http://localhost:8080/`
@@ -96,6 +96,8 @@ Then:
 - For quick verification: `npm run smoke`
 
 When using ngrok, the app auto-detects the HTTPS host and switches to `wss://` for secure WebSocket. A pairing popup shows laptop URL, phone URL, and QR code.
+
+Public mode re-applies a valid-looking `NGROK_AUTH_TOKEN` from the environment or `.env` on every startup and forwards ngrok to `127.0.0.1:8080` to avoid localhost IPv6 timeout behavior. It validates the public URL with a browser-like request; if ngrok returns its free-domain browser warning instead of the app, the laptop and phone may each need to tap **Visit Site** once before pairing. Set `NGROK_URL` to a paid/custom ngrok domain to remove that interstitial. Startup also prints same-Wi-Fi fallback controller URLs for phone testing when public tunneling is unreliable.
 
 ---
 
@@ -135,4 +137,3 @@ When using ngrok, the app auto-detects the HTTPS host and switches to `wss://` f
 - Higher-order weather-aware hazard evaluation
 - Snowflake-backed aggregate analytics
 - Solana proof-of-practice badge (only if clean)
-
