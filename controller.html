@@ -408,9 +408,10 @@
     const gyroFill = document.getElementById('gyro-fill');
     const pedalBrake = document.getElementById('pedal-brake');
     const pedalGas = document.getElementById('pedal-gas');
-    const sigLeft = document.getElementById('sig-left');
-    const sigRight = document.getElementById('sig-right');
-    const speedDisplay = document.getElementById('speed-display');
+    // Commented out - elements removed from UI
+    // const sigLeft = document.getElementById('sig-left');
+    // const sigRight = document.getElementById('sig-right');
+    // const speedDisplay = document.getElementById('speed-display');
     const permOverlay = document.getElementById('perm-overlay');
     const btnPerm = document.getElementById('btn-perm');
 
@@ -424,9 +425,10 @@
     let signalRight = false;
     let lastSent = 0;
     let permGranted = false;
-    let useMetric = true; // km/h vs mph
-    let currentSpeedKmh = 0;
+    // let useMetric = true; // km/h vs mph
+    // let currentSpeedKmh = 0;
 
+    /* Speed display function commented out
     function updateSpeedDisplay() {
       if (!speedDisplay) return;
       if (useMetric) {
@@ -436,6 +438,7 @@
         speedDisplay.textContent = mph + ' mph';
       }
     }
+    */
 
     /* ═══════ WebSocket ═══════ */
     function connect(code) {
@@ -460,12 +463,14 @@
         } else if (data.type === 'error') {
           joinStatus.textContent = data.message;
           joinStatus.className = 'status-msg error';
-        } else if (data.type === 'host_data') {
+        } /* Speed display commented out
+        else if (data.type === 'host_data') {
           if (typeof data.speed === 'number') {
             currentSpeedKmh = data.speed;
             updateSpeedDisplay();
           }
         }
+        */
       };
 
       ws.onclose = () => {
@@ -607,7 +612,7 @@
     bindPedal(pedalBrake, (v) => brake = v);
     bindPedal(pedalGas, (v) => gas = v);
 
-    /* ═══════ Signals (tap to toggle) ═══════ */
+    /* ═══════ Signals (tap to toggle) - COMMENTED OUT ═══════
     sigLeft.addEventListener('touchstart', (e) => { e.preventDefault(); toggleSignal('left'); });
     sigLeft.addEventListener('click', () => toggleSignal('left'));
     sigRight.addEventListener('touchstart', (e) => { e.preventDefault(); toggleSignal('right'); });
@@ -625,6 +630,7 @@
       sigRight.classList.toggle('active-right', signalRight);
       maybeSend();
     }
+    */
 
     /* ═══════ Events ═══════ */
     btnJoin.addEventListener('click', () => {
@@ -639,6 +645,7 @@
 
     btnDisconnect.addEventListener('click', disconnect);
 
+    /* Speed toggle commented out
     // Toggle km/h ↔ mph on speed display tap
     if (speedDisplay) {
       speedDisplay.addEventListener('click', () => {
@@ -646,6 +653,7 @@
         updateSpeedDisplay();
       });
     }
+    */
 
     // Prevent zoom / double-tap
     document.addEventListener('gesturestart', (e) => e.preventDefault());
