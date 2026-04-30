@@ -697,33 +697,11 @@
     },
     {
       "type": "tunnel",
-      "label": "Tunnel",
+      "label": "Union Station Underpass",
       "severity": "medium",
       "lat": 43.6436752,
       "lng": -79.3815642,
       "distance": 11,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
-    },
-    {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6436576,
-      "lng": -79.3818998,
-      "distance": 17,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
-    },
-    {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6446077,
-      "lng": -79.3817831,
-      "distance": 24,
       "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
       "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
       "source": "overpass"
@@ -740,28 +718,6 @@
       "source": "overpass"
     },
     {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6451456,
-      "lng": -79.3821637,
-      "distance": 20,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
-    },
-    {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6453835,
-      "lng": -79.3814351,
-      "distance": 15,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
-    },
-    {
       "type": "sharp_turn",
       "label": "Sharp turn",
       "severity": "high",
@@ -774,35 +730,13 @@
       "description": "Sharp turn of 90° — requires attention and reduced speed.",
       "tip": "Slow down before this turn and stay in the correct lane.",
       "id": "hazard_2"
-    },
-    {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6446522,
-      "lng": -79.3800973,
-      "distance": 7,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
-    },
-    {
-      "type": "tunnel",
-      "label": "Tunnel",
-      "severity": "medium",
-      "lat": 43.6448041,
-      "lng": -79.3804408,
-      "distance": 26,
-      "description": "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
-      "tip": "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
-      "source": "overpass"
     }
   ],
   "hazardSummary": {
-    "total": 3,
+    "total": 5,
     "high": 1,
-    "medium": 2,
-    "low": 0
+    "medium": 3,
+    "low": 1
   },
   "geminiInsights": []
 }

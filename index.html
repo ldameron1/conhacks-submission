@@ -624,6 +624,19 @@
   box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 .hidden { display: none !important; }
+      .transition-overlay {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 9999;
+        transition: opacity 0.4s ease-out;
+      }
+      .transition-overlay.active {
+        opacity: 1;
+        transition: opacity 0.05s ease-in;
+      }
       .cesium-credit-logoContainer,
       .cesium-credit-expand-link { opacity: 0.3; font-size: 10px; }
 
@@ -1296,6 +1309,8 @@
     </style>
   </head>
   <body>
+    <!-- Transition overlay for Next button -->
+    <div id="transition-overlay" class="transition-overlay"></div>
 
     <!-- Persistent Phone Pair Box -->
     <div id="persistent-pair-box" class="phone-pair-box hidden">

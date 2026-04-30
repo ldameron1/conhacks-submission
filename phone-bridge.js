@@ -8,6 +8,7 @@
 
 const WS_PROTOCOL = location.protocol === "https:" ? "wss" : "ws";
 const WS_URL = `${WS_PROTOCOL}://${location.host}`;
+console.log("[PhoneBridge] WS_URL:", WS_URL);
 
 let ws = null;
 let roomCode = null;
@@ -17,24 +18,41 @@ let onInputCallback = null;
 let onStatusCallback = null;
 let onHostDataCallback = null;
 let reconnectTimer = null;
+let intentionalClose = false;
+
+function generateClientRoomCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  return code;
+}
 
 /* ═══════════════ Host (Laptop) ═══════════════ */
 
 export function startHostRoom() {
-  if (ws) ws.close();
+  intentionalClose = true;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (ws) { ws.close(); ws = null; }
+  intentionalClose = false;
   isHost = true;
+  roomCode = generateClientRoomCode();
+  console.log("[PhoneBridge] startHostRoom: client room code", roomCode);
+  // Notify UI immediately so user sees a code even before WebSocket connects
+  if (onStatusCallback) onStatusCallback("room_created", roomCode);
   connect();
 }
 
 export function closeRoom() {
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
+  intentionalClose = true;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (ws) { ws.close(); ws = null; }
+  intentionalClose = false;
   roomCode = null;
   isHost = false;
   isConnected = false;
-  clearTimeout(reconnectTimer);
+  console.log("[PhoneBridge] closeRoom: connection closed intentionally");
 }
 
 export function getRoomCode() {
@@ -48,7 +66,11 @@ export function isControllerConnected() {
 /* ═══════════════ Controller (Phone) ═══════════════ */
 
 export function joinRoom(code) {
-  if (ws) ws.close();
+  intentionalClose = true;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (ws) { ws.close(); ws = null; }
+  intentionalClose = false;
   isHost = false;
   roomCode = code;
   connect();
@@ -58,11 +80,13 @@ export function joinRoom(code) {
 
 function connect() {
   try {
+    console.log("[PhoneBridge] Connecting to", WS_URL, "isHost:", isHost, "roomCode:", roomCode);
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
+      console.log("[PhoneBridge] WebSocket opened, isHost:", isHost, "roomCode:", roomCode);
       if (isHost) {
-        ws.send(JSON.stringify({ type: "host_join" }));
+        ws.send(JSON.stringify({ type: "host_join", roomCode }));
       } else {
         ws.send(JSON.stringify({ type: "controller_join", roomCode }));
       }
@@ -70,20 +94,23 @@ function connect() {
 
     ws.onmessage = (evt) => {
       const data = JSON.parse(evt.data);
+      console.log("[PhoneBridge] Message:", data.type, data);
       handleMessage(data);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (evt) => {
+      console.log("[PhoneBridge] WebSocket closed, code:", evt.code, "reason:", evt.reason, "intentional:", intentionalClose);
       isConnected = false;
       if (onStatusCallback) onStatusCallback("disconnected");
-      // Auto-reconnect after 2s if not explicitly closed
-      if (roomCode || isHost) {
+      // Auto-reconnect after 2s only if not intentionally closed and we expect to be connected
+      if (!intentionalClose && (roomCode || isHost)) {
         reconnectTimer = setTimeout(connect, 2000);
       }
     };
 
-    ws.onerror = () => {
-      if (onStatusCallback) onStatusCallback("error");
+    ws.onerror = (err) => {
+      console.error("[PhoneBridge] WebSocket error:", err);
+      if (onStatusCallback) onStatusCallback("error", "WebSocket connection failed");
     };
   } catch (e) {
     console.error("[PhoneBridge] WebSocket error:", e);

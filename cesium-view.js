@@ -107,33 +107,36 @@ export async function initView(containerId, coords, hazards, cbs, options = {}) 
   const hasIonToken = Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 10;
 
   try {
-    // Prefer Google Maps Tiles API direct 3D tiles (no Cesium ion token needed)
-    if (googleMapsKey && googleMapsKey.length > 10) {
+    // Ion photorealistic tiles (asset 2275207) — proven to work in Test 3
+    if (hasIonToken) {
+      try {
+        viewer = await createPhotorealisticViewer(containerId);
+        hasPhotorealistic = true;
+        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles via Cesium ion");
+      } catch (err) {
+        console.warn("[CesiumView] Ion photorealistic tiles failed:", err.message);
+      }
+    }
+
+    // Fallback: Google Maps Tiles API direct
+    if (!viewer && googleMapsKey && googleMapsKey.length > 10) {
       try {
         viewer = await createGoogleMaps3DViewer(containerId, googleMapsKey);
         hasPhotorealistic = true;
         console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles via Maps API");
       } catch (err) {
         console.warn("[CesiumView] Google Maps 3D Tiles failed:", err.message);
-        // Fall through to Cesium ion approach
       }
     }
 
     if (!viewer && hasIonToken) {
       try {
-        viewer = await createPhotorealisticViewer(containerId);
-        hasPhotorealistic = true;
-        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles via Cesium ion");
-      } catch (err) {
-        console.warn("[CesiumView] Google 3D Tiles via ion failed, trying OSM Buildings:", err.message);
-        try {
-          viewer = await createOsmBuildingsViewer(containerId);
-          hasOsmBuildings = true;
-          console.log("[CesiumView] Loaded OSM Buildings on satellite");
-        } catch (err2) {
-          console.warn("[CesiumView] OSM Buildings failed, falling back to flat satellite:", err2.message);
-          viewer = await createSatelliteViewer(containerId);
-        }
+        viewer = await createOsmBuildingsViewer(containerId);
+        hasOsmBuildings = true;
+        console.log("[CesiumView] Loaded OSM Buildings on satellite");
+      } catch (err2) {
+        console.warn("[CesiumView] OSM Buildings failed, falling back to flat satellite:", err2.message);
+        viewer = await createSatelliteViewer(containerId);
       }
     }
 
@@ -388,15 +391,18 @@ async function createPhotorealisticViewer(containerId) {
   });
 
   try {
-    const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+    const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(2275207);
     v.scene.primitives.add(tileset);
   } catch (e) {
     v.destroy();
     throw e;
   }
 
-  // Hide the globe since the 3D tiles cover it
+  // Enhance visual fidelity for drive mode
   v.scene.globe.show = false;
+  v.scene.globe.depthTestAgainstTerrain = true;
+  v.scene.highDynamicRange = true;
+  v.scene.globe.enableLighting = true;
   return v;
 }
 
@@ -462,20 +468,23 @@ function updateDriveCamera() {
   if (!viewer) return;
   const pos = interpolatePos(routeProgress);
   const heading = getRouteHeading(routeProgress) + headingOffset;
-  console.log("[updateDriveCamera]", pos.lng, pos.lat, DRIVER_HEIGHT, heading);
+  // Photorealistic tiles include real terrain; Toronto ground is ~73m above ellipsoid.
+  // Use ~85m so camera sits ~12m above street level. Fallback to 30m for flat satellite.
+  const camHeight = hasPhotorealistic ? 85 : DRIVER_HEIGHT;
+  console.log("[updateDriveCamera]", pos.lng, pos.lat, camHeight, heading, "photorealistic:", hasPhotorealistic);
 
   viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT),
+    destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight),
     orientation: {
       heading: Cesium.Math.toRadians(heading),
-      pitch: Cesium.Math.toRadians(-5),  // Slight downward look
+      pitch: Cesium.Math.toRadians(hasPhotorealistic ? -15 : -5),
       roll: 0,
     },
   });
 
   // Update position marker
   if (positionMarker) {
-    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, DRIVER_HEIGHT + 5);
+    positionMarker.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, camHeight + 5);
   }
 
   // In photorealistic mode, request scene re-render

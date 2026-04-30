@@ -162,7 +162,8 @@ function showScreen(name) {
 
   const pairBox = $("persistent-pair-box");
   if (pairBox) {
-    if ((name === "report" || name === "practice") && !phoneBridge.isControllerConnected()) {
+    // Show pair box on all screens except when phone is already connected
+    if (!phoneBridge.isControllerConnected()) {
       pairBox.classList.remove("hidden");
     } else {
       pairBox.classList.add("hidden");
@@ -840,6 +841,15 @@ function render2DFallback() {
   }).addTo(state.practiceMap);
 }
 
+function triggerTransitionOverlay() {
+  const overlay = $("transition-overlay");
+  if (!overlay) return;
+  overlay.classList.add("active");
+  requestAnimationFrame(() => {
+    setTimeout(() => overlay.classList.remove("active"), 80);
+  });
+}
+
 function nextHazard() {
   console.log("[nextHazard] Called, practiceIndex:", state.practiceIndex, "hazards:", state.hazards.length, "pass:", currentPracticePass);
   // Guard against re-entrancy during navigation transitions
@@ -847,6 +857,7 @@ function nextHazard() {
     console.log("[nextHazard] Blocked — navigation already in progress");
     return;
   }
+  triggerTransitionOverlay();
   try {
     if (state.practiceIndex < state.hazards.length - 1) {
       console.log("[nextHazard] Advancing to next hazard");
@@ -931,6 +942,8 @@ async function showTriPane() {
 
       try {
         await sleep(50); // Force layout reflow so container has >0 size
+        // Set Cesium ion token so 3D photorealistic tiles can authenticate
+        Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxY2RkMzlmZi1lMGI4LTRmNzUtOGU2MS01ZDMxZWM2ODYwOGIiLCJpZCI6NDI1MzE3LCJpYXQiOjE3Nzc0NjM1MjR9.W0oxtmgNcJJMRxnsOA0KzkW4ed3eTXvM4GE4ZCffcQo";
         await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
           onProgress: updateHUD,
           onHazardApproach: onHazardApproach,
@@ -1638,6 +1651,7 @@ function getControllerUrl() {
 
 function initPhoneBridge() {
   phoneBridge.onStatus((status, data) => {
+    console.log("[initPhoneBridge] status:", status, "data:", data);
     const badge = $("phone-status-badge");
     const codeEl = $("phone-room-code");
     if (!badge) return;
@@ -1649,6 +1663,9 @@ function initPhoneBridge() {
           codeEl.textContent = data;
           codeEl.title = `Open ${getControllerUrl()} and enter room code ${data}`;
         }
+        // Update URL hint too
+        const hintEl = $("phone-url-hint");
+        if (hintEl) hintEl.textContent = `Phone URL: ${getControllerUrl()}  Code: ${data}`;
         break;
       case "controller_connected":
         badge.textContent = "Phone connected";
@@ -1667,6 +1684,12 @@ function initPhoneBridge() {
       case "error":
         badge.textContent = data || "Pairing failed";
         badge.className = "phone-badge error";
+        // Fallback: generate a local code even if WebSocket fails
+        if (!phoneBridge.getRoomCode()) {
+          const fallbackCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+          badge.textContent = `Retrying... (${fallbackCode})`;
+          setTimeout(() => phoneBridge.startHostRoom(), 3000);
+        }
         break;
       case "disconnected":
         badge.textContent = "Not paired";
@@ -1680,6 +1703,10 @@ function initPhoneBridge() {
         break;
     }
   });
+
+  // Auto-start a host room immediately so a code is ready
+  console.log("[initPhoneBridge] Auto-starting host room...");
+  phoneBridge.startHostRoom();
 
   phoneBridge.onInput((input) => {
     // Map phone steering (-1..1) to heading offset degrees

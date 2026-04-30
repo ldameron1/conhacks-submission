@@ -27,18 +27,25 @@ fi
 SERVER_PID=""
 NGROK_PID=""
 
+# Kill any leftover ngrok or node processes from previous runs
+pkill -f "ngrok http" 2>/dev/null || true
+sleep 1
+
 if is_port_in_use; then
   echo "Port $PORT already in use. Reusing existing app server."
 else
   echo "Starting app server on port $PORT..."
-  node server.js >/tmp/route-rehearsal-server.log 2>&1 &
+  nohup node server.js >/tmp/route-rehearsal-server.log 2>&1 &
   SERVER_PID="$!"
-  sleep 1
-  if ! is_port_in_use; then
-    echo "App server failed to bind port $PORT."
+  sleep 2
+  # Verify server actually responds
+  if ! curl -s -o /dev/null http://127.0.0.1:$PORT/; then
+    echo "App server failed to respond on http://127.0.0.1:$PORT"
     echo "Server log: /tmp/route-rehearsal-server.log"
+    cat /tmp/route-rehearsal-server.log
     exit 1
   fi
+  echo "Server responding OK."
 fi
 
 cleanup() {
@@ -52,8 +59,8 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-echo "Starting ngrok tunnel for http://127.0.0.1:$PORT ..."
-ngrok http "127.0.0.1:$PORT" >/tmp/route-rehearsal-ngrok.log 2>&1 &
+echo "Starting ngrok tunnel for port $PORT ..."
+nohup ngrok http $PORT --log stdout >/tmp/route-rehearsal-ngrok.log 2>&1 &
 NGROK_PID="$!"
 echo "ngrok process started (pid: $NGROK_PID). Waiting for public URL..."
 echo "ngrok log: /tmp/route-rehearsal-ngrok.log"

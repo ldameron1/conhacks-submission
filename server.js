@@ -149,9 +149,11 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(raw);
 
       if (data.type === "host_join") {
-        let code = generateRoomCode();
-        // prevent collisions
-        while (rooms.has(code)) code = generateRoomCode();
+        let code = data.roomCode;
+        if (!code || rooms.has(code)) {
+          code = generateRoomCode();
+          while (rooms.has(code)) code = generateRoomCode();
+        }
         rooms.set(code, { host: ws, controller: null, createdAt: Date.now() });
         ws._role = "host";
         ws._room = code;
@@ -243,7 +245,7 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   const boundPort = server.address().port;
   const localhostUrl = `http://localhost:${boundPort}`;
   console.log(`Road Route Rehearsal server running on ${localhostUrl}`);
