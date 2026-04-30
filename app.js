@@ -63,6 +63,62 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Project every hazard onto the route polyline, compute its distance from start,
+ * filter out off-route hazards, and return them strictly A→B ordered.
+ */
+function sortHazardsByRouteProgress(routeCoords, hazards, maxOffRouteM = 60) {
+  if (!routeCoords || routeCoords.length < 2 || !hazards || !hazards.length) {
+    return hazards || [];
+  }
+
+  // Build cumulative distances along the route
+  const cumDist = [0];
+  for (let i = 1; i < routeCoords.length; i++) {
+    const d = haversineDistance(routeCoords[i - 1][1], routeCoords[i - 1][0], routeCoords[i][1], routeCoords[i][0]);
+    cumDist.push(cumDist[i - 1] + d);
+  }
+  const totalDist = cumDist[cumDist.length - 1];
+
+  // For each hazard, find closest point on any segment
+  const projected = hazards.map((h) => {
+    let bestDist = Infinity;
+    let bestProgress = 0;
+    let bestOffRoute = Infinity;
+
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const [lng1, lat1] = routeCoords[i];
+      const [lng2, lat2] = routeCoords[i + 1];
+      const segLen = haversineDistance(lat1, lng1, lat2, lng2);
+      if (segLen === 0) continue;
+
+      // Project h onto segment i→i+1 (treat as 2D, good enough for <1km segments)
+      const t = ((h.lng - lng1) * (lng2 - lng1) + (h.lat - lat1) * (lat2 - lat1)) /
+                ((lng2 - lng1) ** 2 + (lat2 - lat1) ** 2);
+      const clampedT = Math.max(0, Math.min(1, t));
+      const projLng = lng1 + clampedT * (lng2 - lng1);
+      const projLat = lat1 + clampedT * (lat2 - lat1);
+      const offRoute = haversineDistance(h.lat, h.lng, projLat, projLng);
+      const progress = cumDist[i] + clampedT * segLen;
+
+      if (offRoute < bestOffRoute) {
+        bestOffRoute = offRoute;
+        bestProgress = progress;
+      }
+    }
+
+    return { h, progress: bestProgress, offRoute: bestOffRoute };
+  });
+
+  // Filter and sort A→B
+  const filtered = projected
+    .filter((p) => p.offRoute <= maxOffRouteM && p.progress >= 0 && p.progress <= totalDist + 50)
+    .sort((a, b) => a.progress - b.progress)
+    .map((p) => p.h);
+
+  return filtered;
+}
+
 function formatDuration(sec) {
   if (sec < 60) return `${sec}s`;
   const m = Math.round(sec / 60);
@@ -132,12 +188,58 @@ async function fetchRoute(origin, dest) {
   };
 }
 
+/* ═══════════════════ HAZARD ICONS ═══════════════════ */
+function getHazardEmoji(h) {
+  const type = (h.type || "").toLowerCase();
+  switch (type) {
+    case "traffic_signal": return "🚦";
+    case "stop_sign": return "🛑";
+    case "yield_sign": return "⚠️";
+    case "lane_positioning": return "🛣️";
+    case "sharp_turn": return "↩️";
+    case "tunnel": return "🚇";
+    case "merge": return "🔀";
+    case "fork": return "🔀";
+    case "off_ramp": return "⬇️";
+    case "on_ramp": return "⬆️";
+    case "roundabout": return "🔄";
+    case "confusing_signage": return "🪧";
+    case "hidden_turn": return "👁️";
+    case "railway_crossing": return "🚂";
+    case "pedestrian_crossing": return "🚶";
+    case "unmarked_crossing": return "⚠️";
+    case "traffic_calming": return "🐢";
+    case "poor_surface": return "🕳️";
+    case "speed_zone": return "📛";
+    case "sharp_maneuver": return "↪️";
+    default: return "⚠️";
+  }
+}
+
+function makeHazardIcon(h, active = false) {
+  const emoji = getHazardEmoji(h);
+  const size = active ? 32 : 22;
+  const color = h.severity === "high" ? "#ff4466" : h.severity === "medium" ? "#ffaa00" : "#66bbff";
+  return L.divIcon({
+    className: "hazard-marker",
+    html: `<div style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 2px 8px rgba(0,0,0,0.5);border:2px solid #fff;font-size:${active ? 20 : 14}px;line-height:1;">${emoji}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 /* ═══════════════════ GEMINI AI ═══════════════════ */
 async function analyzeWithGemini(steps, geometryHazards) {
   if (!CONFIG.GEMINI_API_KEY) return null;
   const stepsText = steps
     .slice(0, 30)
-    .map((s, i) => `${i + 1}. ${s.maneuver?.instruction || s.name || "continue"} (${s.maneuver?.type || ""} ${s.maneuver?.modifier || ""})`)
+    .map((s, i) => {
+      const lanes = s.intersections?.[0]?.lanes;
+      const laneInfo = lanes && lanes.length
+        ? ` [lanes: ${lanes.map(l => `${l.indications?.join("/") || "?"}${l.valid ? "" : " (invalid)"}`).join(", ")}]`
+        : "";
+      return `${i + 1}. ${s.maneuver?.instruction || s.name || "continue"} (${s.maneuver?.type || ""} ${s.maneuver?.modifier || ""})${laneInfo}`;
+    })
     .join("\n");
   const hazardText = geometryHazards
     .slice(0, 10)
@@ -278,6 +380,12 @@ async function startScan() {
     }
     await sleep(300);
 
+    // Step 6: Strictly order hazards A→B along route, drop off-route ones
+    updateScanStep(statusEl, progressEl, "Ordering hazards along route...", 90);
+    state.hazards = sortHazardsByRouteProgress(state.routeCoords, state.hazards, 60);
+    state.hazardSummary.total = state.hazards.length;
+    await sleep(200);
+
     // Done
     updateScanStep(statusEl, progressEl, `Found ${state.hazards.length} hazard${state.hazards.length !== 1 ? "s" : ""}. Loading report...`, 100);
 
@@ -363,11 +471,9 @@ function initReportMap() {
 
   // Hazard markers
   state.hazards.forEach((h, i) => {
-    const color = h.severity === "high" ? "#ff4466" : h.severity === "medium" ? "#ffaa00" : "#66bbff";
-    L.circleMarker([h.lat, h.lng], {
-      radius: 10, fillColor: color, fillOpacity: 0.9, color: "#fff", weight: 2,
-    }).addTo(state.reportMap)
-      .bindPopup(`<b>${h.label}</b><br>${h.description}`)
+    L.marker([h.lat, h.lng], { icon: makeHazardIcon(h) })
+      .addTo(state.reportMap)
+      .bindPopup(`<b>${getHazardEmoji(h)} ${h.label}</b><br>${h.description}`)
       .on("click", () => scrollToHazard(i));
   });
 
@@ -546,13 +652,8 @@ function renderReviewPass() {
     // Draw all hazard markers
     state.hazards.forEach((hz, idx) => {
       const isActive = idx === state.practiceIndex;
-      const marker = L.circleMarker([hz.lat, hz.lng], {
-        radius: isActive ? 12 : 6,
-        fillColor: isActive ? "#ff4466" : "#ffaa00",
-        fillOpacity: 0.9,
-        color: "#fff",
-        weight: 2
-      }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
+      const marker = L.marker([hz.lat, hz.lng], { icon: makeHazardIcon(hz, isActive) })
+        .addTo(state.practiceMap).bindPopup(`<b>${getHazardEmoji(hz)} ${hz.label}</b>`);
       state.practiceMapMarkers.push(marker);
     });
   } catch (e) {
@@ -589,9 +690,8 @@ function renderStreetViewPass() {
     if (state.splitMapMarkers) state.splitMapMarkers.forEach(m => m.remove());
     state.splitMapMarkers = [];
 
-    const marker = L.circleMarker([h.lat, h.lng], {
-      radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
-    }).addTo(state.splitMap);
+    const marker = L.marker([h.lat, h.lng], { icon: makeHazardIcon(h, true) })
+      .addTo(state.splitMap).bindPopup(`<b>${getHazardEmoji(h)} ${h.label}</b>`);
     state.splitMapMarkers.push(marker);
   } catch (e) {
     console.warn("Map render failed in Street View pass:", e);
@@ -625,7 +725,10 @@ function updateStreetViewOverlay(containerId = "streetview-content") {
 function updateHUD(data) {
   $("hud-progress").textContent = Math.round(data.progress);
   $("hud-dist").textContent = data.nextHazardDist < 9999 ? data.nextHazardDist : "--";
-  // Speed is set by auto-drive; update completion tracking
+  if (typeof data.speed === "number") {
+    $("hud-speed").textContent = data.speed;
+  }
+  // Update completion tracking
   if (data.progress > 0) {
     state.rehearsal.routeCompletion = Math.round(data.progress);
   }
@@ -639,7 +742,8 @@ function onHazardApproach(hazard, index, dist) {
   clearTimeout(alertTimeout);
   alertTimeout = setTimeout(() => alert.classList.remove("visible"), 4000);
 
-  // Play narration
+  // Stop any stale narrations so we don't lag behind the car position, then play
+  narration.stop();
   narration.playHazard(hazard, index, state.hazards.length);
 
   // Track rehearsal: mark hazard as reviewed
@@ -683,13 +787,8 @@ function render2DFallback() {
   // Markers
   state.hazards.forEach((hz, idx) => {
     const isActive = idx === state.practiceIndex;
-    L.circleMarker([hz.lat, hz.lng], {
-      radius: isActive ? 12 : 6,
-      fillColor: isActive ? "#ff4466" : "#ffaa00",
-      fillOpacity: 0.9,
-      color: "#fff",
-      weight: 2
-    }).addTo(state.practiceMap).bindPopup(`<b>${hz.label}</b>`);
+    L.marker([hz.lat, hz.lng], { icon: makeHazardIcon(hz, isActive) })
+      .addTo(state.practiceMap).bindPopup(`<b>${getHazardEmoji(hz)} ${hz.label}</b>`);
   });
 
   // Vehicle marker
@@ -798,7 +897,7 @@ async function showTriPane() {
         await cesiumView.initView("tri-cesium-container", state.routeCoords, state.hazards, {
           onProgress: updateHUD,
           onHazardApproach: onHazardApproach,
-        });
+        }, { googleMapsKey: CONFIG.GOOGLE_MAPS_KEY });
         cesiumInitialized = true;
       } catch (e) {
         console.warn("CesiumJS init failed in tri-pane:", e.message);
@@ -810,7 +909,8 @@ async function showTriPane() {
           L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(map);
           const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
           L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(map);
-          L.circleMarker([h.lat, h.lng], { radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2 }).addTo(map);
+          L.marker([h.lat, h.lng], { icon: makeHazardIcon(h, true) })
+            .addTo(map).bindPopup(`<b>${getHazardEmoji(h)} ${h.label}</b>`);
         }
       }
     }
@@ -819,6 +919,9 @@ async function showTriPane() {
       cesiumView.setMode("drive");
       cesiumView.jumpToHazard(state.practiceIndex);
     }
+
+    // Start manual drive loop so gas/brake control the car immediately
+    if (!manualDriving) startManualDrive();
 
     // Defer map and Street View updates to prevent blocking
     setTimeout(() => {
@@ -831,11 +934,23 @@ async function showTriPane() {
   }
 }
 
+function isNearHazard(lat, lng, progress) {
+  const HAZARD_BUFFER_M = 120;
+  const SLOW_TYPES = new Set(["roundabout", "merge", "fork", "off_ramp", "on_ramp", "sharp_turn", "lane_positioning"]);
+  let nearAny = false;
+  let nearSlow = false;
+  for (const h of state.hazards) {
+    const d = haversineDistance(lat, lng, h.lat, h.lng);
+    if (d <= HAZARD_BUFFER_M) {
+      nearAny = true;
+      if (SLOW_TYPES.has(h.type)) nearSlow = true;
+    }
+  }
+  return { nearAny, nearSlow };
+}
+
 function updateTriPaneStreetViewFromProgress(progress) {
   const now = Date.now();
-  if (now - lastStreetViewUpdate < 1200) return; // throttle to ~0.8 Hz to avoid iframe flicker
-  lastStreetViewUpdate = now;
-
   const maxProgress = state.routeCoords.length - 1;
   const idx = Math.floor(Math.max(0, Math.min(progress, maxProgress)));
   const frac = Math.max(0, Math.min(progress, maxProgress)) - idx;
@@ -844,6 +959,19 @@ function updateTriPaneStreetViewFromProgress(progress) {
   const lat = c1[1] + (c2[1] - c1[1]) * frac;
   const lng = c1[0] + (c2[0] - c1[0]) * frac;
 
+  const { nearAny, nearSlow } = isNearHazard(lat, lng, progress);
+
+  // Smart refresh: 5s normally, 10s near ramps/roundabouts (same view persists longer),
+  // immediate when first entering a hazard zone
+  const baseThrottle = nearSlow ? 10000 : 5000;
+  const sinceLast = now - lastStreetViewUpdate;
+
+  // If we just entered a hazard zone and haven't refreshed recently, force immediate refresh
+  const shouldForce = nearAny && sinceLast > 3000;
+  if (!shouldForce && sinceLast < baseThrottle) return;
+
+  lastStreetViewUpdate = now;
+
   const content = $("tri-streetview-content");
   if (!content) return;
 
@@ -851,16 +979,30 @@ function updateTriPaneStreetViewFromProgress(progress) {
   const dLat = c2[1] - c1[1];
   const heading = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
 
-  const iframe = content.querySelector("iframe");
   const src = `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=0,${Math.round(heading)},0,0,0&output=svembed`;
+
+  // Add blur overlay to prevent epileptic flash during iframe swap
+  const blurOverlay = document.createElement("div");
+  blurOverlay.style.cssText = "position:absolute;inset:0;backdrop-filter:blur(8px);background:rgba(0,0,0,0.35);z-index:10;transition:opacity 0.3s;pointer-events:none;";
+  content.appendChild(blurOverlay);
+
+  const iframe = content.querySelector("iframe");
+  const onLoad = () => {
+    blurOverlay.style.opacity = "0";
+    setTimeout(() => blurOverlay.remove(), 350);
+  };
+
   if (iframe) {
+    iframe.onload = onLoad;
     iframe.src = src;
   } else {
     content.innerHTML = `<iframe class="streetview-frame" allowfullscreen loading="lazy" src="${src}" style="border:0; width:100%; height:100%;"></iframe>`;
+    content.querySelector("iframe").onload = onLoad;
   }
 }
 
 function updateTriPaneMap() {
+  // Initialize the tri-pane map once (shows full route + hazards)
   const h = state.hazards[state.practiceIndex];
   if (!h) return;
   const container = $("tri-map-container");
@@ -872,30 +1014,37 @@ function updateTriPaneMap() {
       L.tileLayer(CONFIG.SAT_TILES, { maxZoom: 19, attribution: "Esri" }).addTo(state.triMap);
       const latLngs = state.routeCoords.map(([lng, lat]) => [lat, lng]);
       L.polyline(latLngs, { color: "#00d4aa", weight: 5, opacity: 0.8 }).addTo(state.triMap);
+
+      // Add car position marker
+      state.triCarMarker = L.circleMarker([h.lat, h.lng], {
+        radius: 8, fillColor: "#00d4aa", fillOpacity: 1, color: "#fff", weight: 2
+      }).addTo(state.triMap);
     } else {
       state.triMap.invalidateSize();
-      // Use setTimeout to defer flyTo and prevent blocking
-      setTimeout(() => {
-        try {
-          if (state.triMap) {
-            state.triMap.flyTo([h.lat, h.lng], 18);
-          }
-        } catch (e) {
-          console.warn("flyTo failed:", e);
-        }
-      }, 0);
     }
 
     if (state.triMapMarkers) state.triMapMarkers.forEach(m => m.remove());
     state.triMapMarkers = [];
 
-    const marker = L.circleMarker([h.lat, h.lng], {
-      radius: 12, fillColor: "#ff4466", fillOpacity: 0.9, color: "#fff", weight: 2
-    }).addTo(state.triMap);
+    const marker = L.marker([h.lat, h.lng], { icon: makeHazardIcon(h, true) })
+      .addTo(state.triMap).bindPopup(`<b>${getHazardEmoji(h)} ${h.label}</b>`);
     state.triMapMarkers.push(marker);
   } catch (e) {
     console.warn("Map render failed in Tri-pane:", e);
   }
+}
+
+function updateTriPaneMapFromProgress(progress) {
+  if (!state.triMap || !state.triCarMarker) return;
+  const maxProgress = state.routeCoords.length - 1;
+  const idx = Math.floor(Math.max(0, Math.min(progress, maxProgress)));
+  const frac = Math.max(0, Math.min(progress, maxProgress)) - idx;
+  const c1 = state.routeCoords[idx] || state.routeCoords[maxProgress];
+  const c2 = state.routeCoords[idx + 1] || c1;
+  const lat = c1[1] + (c2[1] - c1[1]) * frac;
+  const lng = c1[0] + (c2[0] - c1[0]) * frac;
+  state.triCarMarker.setLatLng([lat, lng]);
+  state.triMap.panTo([lat, lng], { animate: true, duration: 0.4 });
 }
 
 /* ═══════════════════ TOAST ═══════════════════ */
@@ -941,34 +1090,34 @@ function initNgrokModal() {
   modal.classList.remove("hidden");
 }
 
-/* ═══════════════════ AUTO-DRIVE ═══════════════════ */
-let autoDriving = false;
-let autoDriveInterval = null;
-const AUTO_DRIVE_SPEED_MIN = 0.03;
-const AUTO_DRIVE_SPEED_MAX = 0.16;
-const AUTO_DRIVE_ACCEL = 0.003;
-const AUTO_DRIVE_BRAKE_DECAY = 0.005;
-let autoDriveSpeed = AUTO_DRIVE_SPEED_MIN;
+/* ═══════════════════ MANUAL DRIVE ═══════════════════ */
+let manualDriving = false;
+let manualDriveInterval = null;
+const MANUAL_DRIVE_MAX_SPEED = 0.18;
+const MANUAL_DRIVE_ACCEL = 0.004;
+const MANUAL_DRIVE_BRAKE_DECAY = 0.008;
+const MANUAL_DRIVE_COAST_DECAY = 0.002;
+let manualDriveSpeed = 0; // index units per frame
 let gasHeld = false;
 let brakeHeld = false;
 
-function startAutoDrive() {
-  autoDriving = true;
+function startManualDrive() {
+  if (manualDriving) return;
+  manualDriving = true;
   state.rehearsal.startTime = state.rehearsal.startTime || Date.now();
 
   // Start distraction audio
   distractions.start();
 
-  // Auto-advance is handled by cesium-view's animation loop via keyboard simulation
-  // We'll use setInterval to feed progress updates
-  autoDriveInterval = setInterval(() => {
+  // Drive loop: speed controlled by gas/brake, no forced minimum speed
+  manualDriveInterval = setInterval(() => {
     if (gasHeld) {
-      autoDriveSpeed = Math.min(AUTO_DRIVE_SPEED_MAX, autoDriveSpeed + AUTO_DRIVE_ACCEL);
+      manualDriveSpeed = Math.min(MANUAL_DRIVE_MAX_SPEED, manualDriveSpeed + MANUAL_DRIVE_ACCEL);
+    } else if (brakeHeld) {
+      manualDriveSpeed = Math.max(0, manualDriveSpeed - MANUAL_DRIVE_BRAKE_DECAY);
     } else {
-      autoDriveSpeed = Math.max(AUTO_DRIVE_SPEED_MIN, autoDriveSpeed - AUTO_DRIVE_ACCEL * 0.5);
-    }
-    if (brakeHeld) {
-      autoDriveSpeed = Math.max(0, autoDriveSpeed - AUTO_DRIVE_BRAKE_DECAY);
+      // Coast to stop
+      manualDriveSpeed = Math.max(0, manualDriveSpeed - MANUAL_DRIVE_COAST_DECAY);
     }
 
     const maxProgress = state.routeCoords.length - 1;
@@ -977,23 +1126,25 @@ function startAutoDrive() {
       const progress = cesiumView.getProgress();
 
       if (progress >= maxProgress - 1) {
-        stopAutoDrive();
+        stopManualDrive();
         finishRehearsal();
         return;
       }
 
-      cesiumView.setProgress(progress + autoDriveSpeed);
+      // Let cesium-view handle its own physics; we just sync progress for external updates
+      cesiumView.setProgress(progress + manualDriveSpeed);
       state.rehearsal.routeCompletion = Math.round((progress / maxProgress) * 100);
       updateTriPaneStreetViewFromProgress(progress);
+      updateTriPaneMapFromProgress(progress);
     } else if (state.practiceMap && fallbackVehicle) {
       // 2D fallback: interpolate along routeCoords
       if (fallbackProgress >= maxProgress - 1) {
-        stopAutoDrive();
+        stopManualDrive();
         finishRehearsal();
         return;
       }
 
-      fallbackProgress += autoDriveSpeed;
+      fallbackProgress += manualDriveSpeed;
       const idx = Math.floor(fallbackProgress);
       const frac = fallbackProgress - idx;
       const c1 = state.routeCoords[idx] || state.routeCoords[maxProgress];
@@ -1006,23 +1157,33 @@ function startAutoDrive() {
 
       state.rehearsal.routeCompletion = Math.round((fallbackProgress / maxProgress) * 100);
       updateTriPaneStreetViewFromProgress(fallbackProgress);
+      updateTriPaneMapFromProgress(fallbackProgress);
     }
 
-    // Update speed display
-    const speedKmh = Math.round(autoDriveSpeed * 400); // approximate
+    // Update speed display (approx km/h)
+    const speedKmh = Math.round(manualDriveSpeed * 400 * 60);
     const speedEl = $("hud-speed");
     if (speedEl) speedEl.textContent = speedKmh;
+
+    // Relay speed to phone controller HUD
+    if (phoneBridge.isControllerConnected && phoneBridge.isControllerConnected()) {
+      phoneBridge.sendToController({ type: "host_data", speed: speedKmh });
+    }
   }, 1000 / 30); // 30 fps
 }
-function stopAutoDrive() {
-  autoDriving = false;
-  clearInterval(autoDriveInterval);
-  autoDriveInterval = null;
+function stopManualDrive() {
+  manualDriving = false;
+  clearInterval(manualDriveInterval);
+  manualDriveInterval = null;
+  manualDriveSpeed = 0;
   lastStreetViewUpdate = 0;
 
   // Pause distractions too
   distractions.stop();
 }
+// Backward-compat alias
+const startAutoDrive = startManualDrive;
+const stopAutoDrive = stopManualDrive;
 function resetSignalHUD() {
   const leftEl = $("hud-signal-left");
   const rightEl = $("hud-signal-right");
@@ -1137,7 +1298,7 @@ function resetAppState() {
   fallbackVehicle = null;
   gasHeld = false;
   brakeHeld = false;
-  autoDriveSpeed = AUTO_DRIVE_SPEED_MIN;
+  manualDriveSpeed = 0;
   cesiumView.destroy();
   cesiumInitialized = false;
   $("input-origin").value = "";
@@ -1438,15 +1599,10 @@ function initPhoneBridge() {
     state.controllerSignals.right = !!input.signalRight;
     updateSignalHUD();
 
-    if (input.brake) {
-      if (autoDriving) stopAutoDrive();
-      cesiumView.setBrake(true);
-    } else {
-      cesiumView.setBrake(false);
-    }
-    if (input.gas && !autoDriving) {
-      autoDriveSpeed = Math.max(autoDriveSpeed, AUTO_DRIVE_SPEED_MIN);
-      startAutoDrive();
+    // Forward gas/brake directly to cesium-view key simulation for manual drive
+    if (cesiumInitialized) {
+      cesiumView.setGas(gasHeld);
+      cesiumView.setBrake(brakeHeld);
     }
   });
 }
@@ -1535,7 +1691,7 @@ function wireEvents() {
 
   // Distraction failure tracking
   distractions.onUserSpoke((transcript) => {
-    if (autoDriving && currentPracticePass === 3) {
+    if (manualDriving && currentPracticePass === 3) {
       console.log("[Distractions] User spoke:", transcript);
       showToast("❌ Speech detected! Keep your eyes on the road!");
       const alertEl = $("hud-alert");
@@ -1566,16 +1722,16 @@ function wireEvents() {
   // Escape to go back
   document.addEventListener("keydown", (e) => {
     if (state.screen === "practice" && e.key === "Escape") {
-      stopAutoDrive();
+      stopManualDrive();
       narration.stop();
       if (cesiumInitialized && currentPracticePass === 3) {
         // Keep it loaded, just pause
       }
       showScreen("report");
     }
-    // Brake key
-    if (state.screen === "practice" && (e.key === "b" || e.key === "B") && autoDriving) {
-      stopAutoDrive();
+    // Brake key stops manual drive
+    if (state.screen === "practice" && (e.key === "b" || e.key === "B") && manualDriving) {
+      stopManualDrive();
     }
   });
 }

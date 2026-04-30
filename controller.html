@@ -121,6 +121,28 @@
       color: var(--text2);
     }
 
+    /* ─── Speedometer ─── */
+    .speed-hud {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 6px;
+    }
+    .speed-value {
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    .speed-unit {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text2);
+    }
+
     /* ─── Gyro Visualizer ─── */
     .gyro-hud {
       background: var(--surface);
@@ -304,6 +326,11 @@
       <button id="btn-disconnect" class="disconnect-btn">Disconnect</button>
     </div>
 
+    <div class="speed-hud">
+      <span class="speed-value" id="speed-value">0</span>
+      <span class="speed-unit">km/h</span>
+    </div>
+
     <div class="gyro-hud">
       <div class="gyro-value" id="gyro-value">0&deg;</div>
       <div class="gyro-bar">
@@ -370,6 +397,7 @@
     const pedalGas = document.getElementById('pedal-gas');
     const sigLeft = document.getElementById('sig-left');
     const sigRight = document.getElementById('sig-right');
+    const speedValue = document.getElementById('speed-value');
     const permOverlay = document.getElementById('perm-overlay');
     const btnPerm = document.getElementById('btn-perm');
 
@@ -407,6 +435,10 @@
         } else if (data.type === 'error') {
           joinStatus.textContent = data.message;
           joinStatus.className = 'status-msg error';
+        } else if (data.type === 'host_data' && data.payload) {
+          if (typeof data.payload.speed === 'number' && speedValue) {
+            speedValue.textContent = data.payload.speed;
+          }
         }
       };
 

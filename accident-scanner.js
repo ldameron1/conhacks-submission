@@ -25,10 +25,27 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Distance from a point to the nearest route segment (perpendicular or endpoint). */
 function distanceToRoute(point, routeCoords) {
   let min = Infinity;
-  for (const [lng, lat] of routeCoords) {
-    min = Math.min(min, haversine(point.lat, point.lon, lat, lng));
+  const px = point.lon, py = point.lat;
+  for (let i = 0; i < routeCoords.length - 1; i++) {
+    const [lng1, lat1] = routeCoords[i];
+    const [lng2, lat2] = routeCoords[i + 1];
+    // Project point onto segment (treat lon/lat as 2D Euclidean; fine for <1km segments)
+    const dx = lng2 - lng1;
+    const dy = lat2 - lat1;
+    const segLenSq = dx * dx + dy * dy;
+    let t = segLenSq === 0 ? 0 : ((px - lng1) * dx + (py - lat1) * dy) / segLenSq;
+    t = Math.max(0, Math.min(1, t));
+    const projLng = lng1 + t * dx;
+    const projLat = lat1 + t * dy;
+    min = Math.min(min, haversine(py, px, projLat, projLng));
+  }
+  // Also check endpoints in case route is a single point
+  if (routeCoords.length === 1) {
+    const [lng, lat] = routeCoords[0];
+    min = Math.min(min, haversine(py, px, lat, lng));
   }
   return min;
 }
@@ -59,7 +76,6 @@ function buildQuery(bbox) {
       way["surface"~"gravel|unpaved|dirt|mud|sand|compacted"](${bbox});
       way["maxspeed"~"^[1-3][0-9]$"](${bbox});
       way["tunnel"="yes"](${bbox});
-      way["tunnel"="building_passage"](${bbox});
     );
     out body center;
   `;
@@ -140,17 +156,15 @@ function parseElement(el, lat, lon, dist) {
     };
   }
 
-  if (tags.tunnel === "yes" || tags.tunnel === "building_passage") {
+  if (tags.tunnel === "yes") {
     return {
       type: "tunnel",
-      label: tags.tunnel === "building_passage" ? "Covered Road / Building Passage" : "Tunnel",
+      label: "Tunnel",
       severity: "medium",
       lat,
       lng: lon,
       distance: Math.round(dist),
-      description: tags.tunnel === "building_passage"
-        ? "Road passes through a building — reduced visibility and clearance."
-        : "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
+      description: "Tunnel ahead — reduced visibility, possible GPS loss, and changing conditions.",
       tip: "Remove sunglasses, turn on headlights, maintain lane position, and avoid stopping.",
       source: "overpass",
     };
@@ -226,7 +240,9 @@ export async function scanAccidents(coords) {
       if (!h) continue;
       h.source = "overpass";
 
-      if (dist <= 30) {
+      // Tunnels are large infrastructure and must be directly on the route
+      const threshold = h.type === "tunnel" ? 20 : 30;
+      if (dist <= threshold) {
         hazards.push(h); // on or immediately adjacent to the route
       } else if (dist <= 120) {
         excluded.push(h); // in query area but likely on parallel road / detour

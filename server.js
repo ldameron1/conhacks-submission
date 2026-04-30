@@ -189,6 +189,16 @@ wss.on("connection", (ws) => {
         }
       }
 
+      else if (data.type === "host_data") {
+        const room = rooms.get(ws._room);
+        if (room && room.controller && room.controller.readyState === WebSocket.OPEN) {
+          room.controller.send(JSON.stringify({
+            type: "host_data",
+            payload: data.payload,
+          }));
+        }
+      }
+
       else if (data.type === "host_ping") {
         const room = rooms.get(ws._room);
         if (room && room.controller && room.controller.readyState === WebSocket.OPEN) {

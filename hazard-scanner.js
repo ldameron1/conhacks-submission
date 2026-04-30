@@ -177,9 +177,63 @@ export function analyzeSteps(steps) {
 /* ───────────────── Lane Strategy Detection ───────────────── */
 
 /**
+ * Analyze OSRM lane data to produce a precise human-readable lane description.
+ * e.g. "the rightmost left turn lane (middle lane of 3)" instead of just "left lane".
+ */
+function describeLaneAdvice(step, maneuverModifier) {
+  const intersections = step.intersections;
+  if (!intersections || !intersections.length) return null;
+  const lanes = intersections[0].lanes;
+  if (!lanes || lanes.length === 0) return null;
+
+  const total = lanes.length;
+  const validIndices = lanes.map((l, i) => ({ ...l, idx: i })).filter(l => l.valid).map(l => l.idx);
+  if (validIndices.length === 0 || validIndices.length === total) return null;
+
+  const modifier = (maneuverModifier || "").toLowerCase();
+  const turnWord = modifier.includes("left") ? "left" : modifier.includes("right") ? "right" : "turn";
+
+  // Helper: position label for a single lane index
+  const posLabel = (idx) => {
+    if (total === 1) return "the only lane";
+    if (idx === 0) return "the leftmost lane";
+    if (idx === total - 1) return "the rightmost lane";
+    if (total === 3 && idx === 1) return "the middle lane";
+    if (total === 2 && idx === 1) return "the right lane";
+    return `lane ${idx + 1} from the left`;
+  };
+
+  // Check if valid lanes are turn-dedicated (indications contain the turn direction)
+  const validLanes = validIndices.map(i => lanes[i]);
+  const validIndications = validLanes.flatMap(l => l.indications || []);
+  const isTurnDedicated = validIndications.some(ind => ind.includes(turnWord) || ind.includes("uturn"));
+
+  if (validIndices.length === 1) {
+    const pos = posLabel(validIndices[0]);
+    const laneKind = isTurnDedicated ? `${turnWord} turn lane` : "lane";
+    const label = pos.includes("middle") || pos.includes("leftmost") || pos.includes("rightmost")
+      ? `Get in the ${pos.replace("the ", "")} ${laneKind} early`
+      : `Get in ${pos} early`;
+    const description = `You need to ${modifier} in the upcoming maneuver. The correct lane is ${pos} — it is a ${laneKind}.`;
+    const tip = `Position yourself in ${pos} well before the intersection. You won't have time to change lanes last-minute.`;
+    return { label, description, tip };
+  }
+
+  // Multiple valid lanes
+  const positions = validIndices.map(posLabel).join(" or ");
+  const laneKind = isTurnDedicated ? `${turnWord} turn lanes` : "valid lanes";
+  const label = validIndices.length === 2 && validIndices[0] === 0 && validIndices[1] === 1 && turnWord === "left"
+    ? "Get in one of the two left turn lanes early"
+    : `Get in correct ${laneKind} early`;
+  const description = `You need to ${modifier}. You have ${validIndices.length} valid ${laneKind}: ${positions}. Choose the one that best matches your route.`;
+  const tip = `Move into the correct lane early — you have ${validIndices.length} valid options for this ${modifier}.`;
+  return { label, description, tip };
+}
+
+/**
  * Detect places where you need to be in a specific lane EARLY because
  * a turn is coming soon after joining a road or after another maneuver.
- * e.g. "Get in the left lane now because you turn left in 400m"
+ * Uses OSRM lane data for precise lane descriptions.
  */
 export function detectLaneStrategy(steps) {
   const hazards = [];
@@ -200,21 +254,24 @@ export function detectLaneStrategy(steps) {
     // Check if current step is short (under 500m) — meaning the turn comes up fast
     const currDist = curr.distance || 0;
     if (currDist > 0 && currDist < 500 && (nextModifier.includes("left") || nextModifier.includes("right"))) {
-      const side = nextModifier.includes("left") ? "left" : "right";
       const loc = currM.location || [0, 0];
       const urgency = currDist < 200 ? "high" : "medium";
 
+      // Try lane-aware description; fall back to simple left/right
+      const laneAdvice = describeLaneAdvice(next, nextM.modifier);
+      const side = nextModifier.includes("left") ? "left" : "right";
+
       hazards.push({
         type: "lane_positioning",
-        label: `Get in ${side} lane early`,
+        label: laneAdvice?.label || `Get in ${side} lane early`,
         severity: urgency,
         source: "geometry",
         lat: loc[1],
         lng: loc[0],
         stepIndex: i,
         heading: Math.round(currM.bearing_after || 0),
-        description: `You need to turn ${nextModifier} in ${Math.round(currDist)}m onto ${next.name || "the next road"}. Get into the ${side} lane as soon as you enter ${curr.name || "this road"}.`,
-        tip: `Move to the ${side} lane immediately — the turn comes up fast and you won't have time to change lanes later.`,
+        description: laneAdvice?.description || `You need to turn ${nextModifier} in ${Math.round(currDist)}m onto ${next.name || "the next road"}. Get into the ${side} lane as soon as you enter ${curr.name || "this road"}.`,
+        tip: laneAdvice?.tip || `Move to the ${side} lane immediately — the turn comes up fast and you won't have time to change lanes later.`,
         road: curr.name || "",
         instruction: nextM.instruction || "",
       });

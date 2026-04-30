@@ -25,6 +25,7 @@ let loopId = null;
 let callbacks = {};
 let positionMarker = null;
 let hasPhotorealistic = false; // true if Google 3D Tiles loaded
+let hasOsmBuildings = false;  // true if OSM Buildings loaded
 let leafletMap = null;
 let leafletMarker = null;
 let leafletRoute = null;
@@ -35,6 +36,13 @@ const DRIVER_HEIGHT = 30;   // meters above ellipsoid (fixed, no terrain samplin
 const HAZARD_ALERT_DIST = 100; // meters
 const DEG = Math.PI / 180;
 let lastAlertedHazard = -1;
+
+// Manual drive physics
+let currentSpeed = 0;       // index units per frame
+const ACCEL_RATE = 0.004;   // speed increase per frame when gas held
+const COAST_DECAY = 0.002;  // speed decrease per frame when no input
+const BRAKE_DECAY = 0.008;  // speed decrease per frame when brake held
+const MAX_SPEED = 0.18;     // max index units per frame
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -80,7 +88,7 @@ function getRouteHeading(progress) {
 
 /* ═══════════════ INIT ═══════════════ */
 
-export async function initView(containerId, coords, hazards, cbs) {
+export async function initView(containerId, coords, hazards, cbs, options = {}) {
   callbacks = cbs || {};
   routeCoords = coords.map(([lng, lat]) => ({ lng, lat }));
   hazardData = hazards;
@@ -88,6 +96,7 @@ export async function initView(containerId, coords, hazards, cbs) {
   headingOffset = 0;
   lastAlertedHazard = -1;
   hasPhotorealistic = false;
+  const googleMapsKey = options.googleMapsKey || "";
 
   // Cleanup any previous viewer
   destroy();
@@ -98,17 +107,38 @@ export async function initView(containerId, coords, hazards, cbs) {
   const hasIonToken = Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 10;
 
   try {
-    if (hasIonToken) {
+    // Prefer Google Maps Tiles API direct 3D tiles (no Cesium ion token needed)
+    if (googleMapsKey && googleMapsKey.length > 10) {
+      try {
+        viewer = await createGoogleMaps3DViewer(containerId, googleMapsKey);
+        hasPhotorealistic = true;
+        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles via Maps API");
+      } catch (err) {
+        console.warn("[CesiumView] Google Maps 3D Tiles failed:", err.message);
+        // Fall through to Cesium ion approach
+      }
+    }
+
+    if (!viewer && hasIonToken) {
       try {
         viewer = await createPhotorealisticViewer(containerId);
         hasPhotorealistic = true;
-        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles");
+        console.log("[CesiumView] Loaded Google Photorealistic 3D Tiles via Cesium ion");
       } catch (err) {
-        console.warn("[CesiumView] Google 3D Tiles failed, falling back to satellite:", err.message);
-        viewer = await createSatelliteViewer(containerId);
+        console.warn("[CesiumView] Google 3D Tiles via ion failed, trying OSM Buildings:", err.message);
+        try {
+          viewer = await createOsmBuildingsViewer(containerId);
+          hasOsmBuildings = true;
+          console.log("[CesiumView] Loaded OSM Buildings on satellite");
+        } catch (err2) {
+          console.warn("[CesiumView] OSM Buildings failed, falling back to flat satellite:", err2.message);
+          viewer = await createSatelliteViewer(containerId);
+        }
       }
-    } else {
-      console.log("[CesiumView] No Cesium ion token. Using satellite fallback.");
+    }
+
+    if (!viewer) {
+      console.log("[CesiumView] No 3D tile keys available. Using satellite fallback.");
       viewer = await createSatelliteViewer(containerId);
     }
   } catch (e) {
@@ -156,8 +186,18 @@ export async function initView(containerId, coords, hazards, cbs) {
 
   // Hazard markers — each at fixed height
   hazardMarkers = [];
+  const typeToEmoji = {
+    traffic_signal: "🚦", stop_sign: "🛑", yield_sign: "⚠️",
+    lane_positioning: "🛣️", sharp_turn: "↩️", tunnel: "🚇",
+    merge: "🔀", fork: "🔀", off_ramp: "⬇️", on_ramp: "⬆️",
+    roundabout: "🔄", confusing_signage: "🪧", hidden_turn: "👁️",
+    railway_crossing: "🚂", pedestrian_crossing: "🚶", unmarked_crossing: "⚠️",
+    traffic_calming: "🐢", poor_surface: "🕳️", speed_zone: "📛",
+    sharp_maneuver: "↪️",
+  };
   hazardData.forEach((h, i) => {
     const color = h.severity === "high" ? "#ff4466" : h.severity === "medium" ? "#ffaa00" : "#66bbff";
+    const emoji = typeToEmoji[(h.type || "").toLowerCase()] || "⚠️";
     const entity = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(h.lng, h.lat, 35),
       point: {
@@ -167,7 +207,7 @@ export async function initView(containerId, coords, hazards, cbs) {
         outlineWidth: 2,
       },
       label: {
-        text: `⚠ ${h.label}`,
+        text: `${emoji} ${h.label}`,
         font: "bold 14px sans-serif",
         fillColor: Cesium.Color.fromCssColorString(color),
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -208,6 +248,49 @@ export async function initView(containerId, coords, hazards, cbs) {
 }
 
 /**
+ * Creates a satellite globe with OSM Buildings overlay (needs Cesium ion token).
+ * Used as intermediate fallback when photorealistic tiles aren't available.
+ */
+async function createOsmBuildingsViewer(containerId) {
+  const esriProvider = new Cesium.UrlTemplateImageryProvider({
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    maximumLevel: 19,
+    credit: "Esri",
+  });
+
+  const v = new Cesium.Viewer(containerId, {
+    baseLayer: false,
+    animation: false,
+    baseLayerPicker: false,
+    fullscreenButton: false,
+    geocoder: false,
+    homeButton: false,
+    infoBox: false,
+    sceneModePicker: false,
+    selectionIndicator: false,
+    timeline: false,
+    navigationHelpButton: false,
+    scene3DOnly: true,
+    showRenderLoopErrors: false,
+    orderIndependentTranslucency: false
+  });
+
+  v.scene.imageryLayers.addImageryProvider(esriProvider);
+
+  try {
+    const tileset = await Cesium.createOsmBuildings();
+    v.scene.primitives.add(tileset);
+  } catch (e) {
+    v.destroy();
+    throw e;
+  }
+
+  v.scene.globe.show = true;
+  v.scene.globe.depthTestAgainstTerrain = true;
+  return v;
+}
+
+/**
  * Creates a satellite globe viewer (no Cesium ion needed).
  * Used as fallback when photorealistic tiles aren't available.
  */
@@ -243,6 +326,43 @@ async function createSatelliteViewer(containerId) {
 
   v.scene.globe.show = true;
   v.scene.globe.depthTestAgainstTerrain = true;
+  return v;
+}
+
+/**
+ * Creates a photorealistic 3D tiles viewer using Google Maps Tiles API directly.
+ * Does NOT require a Cesium ion token — uses the user's existing GOOGLE_MAPS_KEY.
+ */
+async function createGoogleMaps3DViewer(containerId, apiKey) {
+  const v = new Cesium.Viewer(containerId, {
+    baseLayer: false,
+    animation: false,
+    baseLayerPicker: false,
+    fullscreenButton: false,
+    geocoder: false,
+    homeButton: false,
+    infoBox: false,
+    sceneModePicker: false,
+    selectionIndicator: false,
+    timeline: false,
+    navigationHelpButton: false,
+    scene3DOnly: true,
+    showRenderLoopErrors: false,
+    orderIndependentTranslucency: false
+  });
+
+  try {
+    const tileset = await Cesium.Cesium3DTileset.fromUrl(
+      `https://tile.googleapis.com/v1/3dtiles/root.json?key=${encodeURIComponent(apiKey)}`
+    );
+    v.scene.primitives.add(tileset);
+  } catch (e) {
+    v.destroy();
+    throw e;
+  }
+
+  // Hide the globe since the 3D tiles cover it
+  v.scene.globe.show = false;
   return v;
 }
 
@@ -464,6 +584,8 @@ function update() {
   }
 
   handleMovementKeys();
+  // Advance route based on accumulated speed
+  routeProgress = Math.max(0, Math.min(routeProgress + currentSpeed, routeCoords.length - 1));
   updateDriveCamera();
 
   if (currentMode === "pip") {
@@ -476,13 +598,24 @@ function update() {
 
 function handleMovementKeys() {
   const inDriveMode = currentMode === "drive" || currentMode === "pip";
-  // Forward / backward
-  if (keysDown.has("arrowup") || keysDown.has("w")) {
-    routeProgress = Math.min(routeProgress + MOVE_SPEED, routeCoords.length - 1);
+  const gasHeld = keysDown.has("arrowup") || keysDown.has("w");
+  const brakeHeld = keysDown.has("arrowdown") || keysDown.has("s");
+
+  if (inDriveMode) {
+    if (gasHeld) {
+      currentSpeed = Math.min(currentSpeed + ACCEL_RATE, MAX_SPEED);
+    } else if (brakeHeld) {
+      currentSpeed = Math.max(currentSpeed - BRAKE_DECAY, -MAX_SPEED * 0.5);
+    } else {
+      // Coast to stop
+      if (currentSpeed > 0) {
+        currentSpeed = Math.max(currentSpeed - COAST_DECAY, 0);
+      } else if (currentSpeed < 0) {
+        currentSpeed = Math.min(currentSpeed + COAST_DECAY, 0);
+      }
+    }
   }
-  if (keysDown.has("arrowdown") || keysDown.has("s")) {
-    routeProgress = Math.max(routeProgress - MOVE_SPEED, 0);
-  }
+
   // Look left / right (only in drive modes)
   if (inDriveMode) {
     if (keysDown.has("arrowleft") || keysDown.has("a")) {
@@ -529,11 +662,15 @@ function emitProgress() {
       }
     }
 
+    // Approximate km/h from speed (index units/frame at 60fps → rough scale)
+    const speedKmh = Math.round(currentSpeed * 400 * 60);
+
     callbacks.onProgress({
       progress: pct,
       position: pos,
       nextHazard,
       nextHazardDist: Math.round(nextHazardDist),
+      speed: speedKmh,
     });
   }
 }
@@ -552,6 +689,7 @@ export function jumpToHazard(index) {
   // Back up a bit so the hazard is ahead of you
   routeProgress = Math.max(0, closestIdx - 5);
   headingOffset = 0;
+  currentSpeed = 0;
   lastAlertedHazard = -1;
   if (currentMode !== "overview") {
     updateDriveCamera();
@@ -560,7 +698,8 @@ export function jumpToHazard(index) {
 
 export function setProgress(progress) {
   routeProgress = Math.max(0, Math.min(progress, routeCoords.length - 1));
-  // Update camera and check hazards when progress is set externally (auto-drive)
+  currentSpeed = 0;
+  // Update camera and check hazards when progress is set externally
   if (currentMode === "drive" || currentMode === "pip") {
     updateDriveCamera();
     checkHazardProximity();
@@ -571,6 +710,14 @@ export function setProgress(progress) {
 
 export function getProgress() {
   return routeProgress;
+}
+
+export function getSpeed() {
+  return currentSpeed;
+}
+
+export function setSpeed(val) {
+  currentSpeed = val;
 }
 
 export function setHeadingOffset(val) {
@@ -607,4 +754,6 @@ export function destroy() {
   positionMarker = null;
   keysDown.clear();
   hasPhotorealistic = false;
+  hasOsmBuildings = false;
+  currentSpeed = 0;
 }

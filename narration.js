@@ -135,12 +135,15 @@ async function generateAudio(text, cacheKey) {
 /* ═══════════════ PLAYBACK ═══════════════ */
 
 /**
- * Play narration for a specific hazard. Queues if something is already playing.
+ * Play narration for a specific hazard. Clears queue first to prevent desync.
  */
 export async function playHazard(hazard, index, total) {
   if (muted) return;
 
   const text = buildNarrationText(hazard, index, total);
+
+  // Clear any pending narrations so we don't lag behind the car position
+  stop();
 
   // Check cache first
   let audioData = audioCache.get(index);
@@ -148,7 +151,11 @@ export async function playHazard(hazard, index, total) {
     audioData = await generateAudio(text, index);
   }
 
-  if (!audioData) return;
+  // Only play ElevenLabs audio; skip if unavailable (native TTS is too slow and desyncs)
+  if (!audioData || (typeof audioData === "object" && audioData.type === "native")) {
+    console.warn("[Narration] Skipping hazard narration — ElevenLabs audio not available.");
+    return;
+  }
 
   queue.push(audioData);
   if (!isPlaying) {

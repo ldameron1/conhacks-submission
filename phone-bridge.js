@@ -15,6 +15,7 @@ let isHost = false;
 let isConnected = false;
 let onInputCallback = null;
 let onStatusCallback = null;
+let onHostDataCallback = null;
 let reconnectTimer = null;
 
 /* ═══════════════ Host (Laptop) ═══════════════ */
@@ -110,6 +111,9 @@ function handleMessage(data) {
     case "controller_input":
       if (onInputCallback) onInputCallback(data);
       break;
+    case "host_data":
+      if (onHostDataCallback) onHostDataCallback(data.payload);
+      break;
     case "error":
       if (onStatusCallback) onStatusCallback("error", data.message);
       break;
@@ -139,6 +143,14 @@ export function sendSignal(left, right) {
   ws.send(JSON.stringify({ type: "controller_input", steering: 0, brake: false, gas: false, signalLeft: left, signalRight: right }));
 }
 
+/**
+ * Send data from host to the connected controller (e.g., speedometer updates).
+ */
+export function sendToController(data) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "host_data", payload: data }));
+}
+
 /* ═══════════════ Callbacks ═══════════════ */
 
 export function onInput(cb) {
@@ -147,4 +159,8 @@ export function onInput(cb) {
 
 export function onStatus(cb) {
   onStatusCallback = cb;
+}
+
+export function onHostData(cb) {
+  onHostDataCallback = cb;
 }
