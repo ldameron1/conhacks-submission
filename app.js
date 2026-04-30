@@ -1658,21 +1658,10 @@ function renderExamples() {
 }
 
 /* ═══════════════════ DEMO ROUTES (offline, no API) ═══════════════════ */
-const DEMO_ROUTES = [
-  { file: "data/demo-routes/detroit-niagara.json", label: "🚗 Detroit → Niagara Falls" },
-  { file: "data/demo-routes/vegas-grandcanyon.json", label: "🎰 Vegas → Grand Canyon" },
-  { file: "data/demo-routes/la-gary.json", label: "🌴 LA → Gary, Indiana" },
-];
+const DEMO_ROUTES = [];
 
 function renderDemoRoutes() {
-  const container = $("demo-routes");
-  DEMO_ROUTES.forEach((demo) => {
-    const chip = document.createElement("button");
-    chip.className = "example-chip";
-    chip.textContent = demo.label;
-    chip.addEventListener("click", () => loadDemoRoute(demo.file));
-    container.appendChild(chip);
-  });
+  // Demo routes removed
 }
 
 async function loadDemoRoute(file, dataOverride = null) {

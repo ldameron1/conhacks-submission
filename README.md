@@ -4,6 +4,9 @@ Note: This project was created using vibe-coding techniques, including this very
 
 **Practice any driving route from home before you brave it for real.**
 
+> **Status:** MVP Goals Achieved & Remote Synchronized — April 29, 2026  
+> All core features are functional, offline demo routes are fully cached, and the repository is pushed to remote origin.
+
 RRR is a driver-confusion detection and rehearsal tool. It scans a route for pain points — ambiguous exits, lane splits, rapid merges, hidden entrances, confusing signage — then lets the driver practice those moments in a 3D/StreetView environment with a phone-as-steering-wheel controller, narrated by a driving-instructor voice.
 
 ## Architecture Overview
@@ -38,17 +41,17 @@ On the backend, a minimal Node.js server paired with the `ws` library and an `ng
 |---|---|---|
 | **OSRM** (Project OSRM public) | `app.js` | Turn-by-turn routing + geometry coordinates |
 | **Nominatim** (OSM) | `app.js` | Forward geocoding for origin/destination |
-| **Overpass API** (OSM) | `accident-scanner.js` | Real-world hazard data — traffic signals, stop signs, crossings, railway crossings, tunnels, poor surfaces, speed zones, traffic calming |
+| **Overpass API** (OSM) | `accident-scanner.js` | Real-world hazard data — traffic signals, stop signs, traffic calming, tunnels, poor surfaces, speed zones, OSM-tagged hazards |
 | **Google Gemini 2.0 Flash** | `app.js` | AI route analysis — lane positioning, confusing signage, hidden turns, merge timing, road layout surprises |
 | **ElevenLabs TTS** (Flash v2.5) | `narration.js`, `distractions.js` | Instructor voice narration + multi-character distraction simulation (4 voice personas) |
-| **Google Maps Embed** | `app.js` | Optional StreetView overlay for real-world reference |
-| **Cesium ion** | `cesium-view.js` | Token auth for Cesium globe (falls back to ArcGIS satellite if unavailable) |
+| **Street View** | `app.js` | Free dynamic Street View embed (`output=svembed`) — no API key required |
+| **Cesium ion** | `cesium-view.js` | Token auth for Cesium globe with Firefox black-screen fix (falls back to ArcGIS satellite if unavailable) |
 
 ### Hazard Detection Pipeline
 | Scanner | Source | What it detects |
 |---|---|---|
 | `hazard-scanner.js` | Route geometry + OSRM steps | Sharp turns, U-turns, merges, forks, ramps, roundabouts, lane positioning, confusing signage, decision clusters |
-| `accident-scanner.js` | Overpass API (OSM) | Traffic signals, stop signs, yield signs, unmarked crossings, traffic calming, railway crossings, tunnels, poor surfaces, speed zones, OSM-tagged hazards |
+| `accident-scanner.js` | Overpass API (OSM) | Traffic signals, stop signs, yield signs, traffic calming, tunnels, poor surfaces, speed zones, OSM-tagged hazards |
 | Gemini AI | `app.js` → Gemini 2.0 Flash | Lane positioning advice, confusing signage zones, hidden/tricky turns, merge/exit timing, road layout surprises |
 
 ### Phone Controller
@@ -56,7 +59,6 @@ On the backend, a minimal Node.js server paired with the `ws` library and an `ng
 |---|---|
 | **Steering** | Device orientation API (`gamma` axis → left/right tilt) |
 | **Brake / Gas** | Touch pedals with press-and-hold |
-| **Turn Signals** | Tap-to-toggle L/R buttons |
 | **Pairing** | WebSocket room code (4 chars) with auto-reconnect |
 | **iOS Support** | `DeviceOrientationEvent.requestPermission()` flow |
 
@@ -79,23 +81,25 @@ npm install
 
 # API keys — set via environment or .env (leave blank for graceful fallback)
 export GEMINI_API_KEY="..."
-export GOOGLE_MAPS_KEY="..."
 export ELEVENLABS_API_KEY="..."
+# GOOGLE_MAPS_KEY is no longer required for Street View
 
-npm run startup
+npm start
 ```
-
-This opens an interactive startup menu:
-1. **Public mode** — ngrok HTTPS tunnel for internet pairing
-2. **Status** — check if server is running
-3. **Stop** — aggressively kill processes on port 8080
-4. **Exit** — close the startup menu
 
 Then:
 - **Laptop**: open `http://localhost:8080/`
 - **Phone**: open `http://<laptop-ip>:8080/controller.html`
 - Click **📱 Pair** → enter 4-letter code on phone
 - For quick verification: `npm run smoke`
+
+### Interactive startup menu (optional)
+
+```bash
+npm run startup
+```
+
+Opens a menu with public ngrok mode, status check, stop, and exit.
 
 When using ngrok, the app auto-detects the HTTPS host and switches to `wss://` for secure WebSocket. A pairing popup shows laptop URL, phone URL, and QR code.
 
@@ -108,28 +112,35 @@ Public mode re-applies a valid-looking `NGROK_AUTH_TOKEN` from the environment o
 | Document | Contents |
 |---|---|
 | [PROPOSAL.md](docs/PROPOSAL.md) | Product framing, target users, MVP scope, system architecture, agile sprints, risks, demo narrative |
-| [SCHEMA.md](docs/SCHEMA.md) | Route, segment, pain point, scene card, and rehearsal run data models |
-| [HANDOFF.md](HANDOFF.md) | Technical handoff — built features, next steps, key files, environment details |
+| [SCHEMA.md](SCHEMA.md) | Route, segment, pain point, scene card, and rehearsal run data models |
+| [HANDOFF.md](HANDOFF.md) | Final technical handoff — built features, fixes, current status, next steps |
+| [IDEA_DECISION.md](docs/IDEA_DECISION.md) | Why Road Route Rehearsal was chosen over alternatives, sponsor-fit analysis |
 
 ### Demo Data
 - `data/demo-routes/downtown-garage.json` — wrong-exit and hidden-garage route
 - `data/demo-routes/airport-merge.json` — merge-heavy airport route
+- `data/demo-routes/cached-example-0.json` — fully cached offline demo (instant load)
+- `data/demo-routes/cached-example-1.json` — fully cached offline demo (instant load)
+- `data/demo-routes/cached-example-2.json` — fully cached offline demo (instant load)
+- `data/demo-routes/desert-crossing.json`, `detroit-niagara.json`, `la-gary.json`, `vegas-grandcanyon.json` — additional canned routes
 - `data/rehearsal-run.example.json` — example rehearsal result payload
 
 ---
 
 ## MVP Features
 
-1. Enter origin + destination (or load a demo route)
+1. Enter origin + destination (or load a demo / fully cached offline route)
 2. Multi-layer hazard scan: geometry → OSM real-world → Gemini AI
 3. Interactive report map with color-coded hazard markers + provenance badges (GEO / OSM / AI)
-4. 3D practice view (CesiumJS satellite globe) with driver-POV camera
-5. Phone-as-steering-wheel via WebSocket pairing
-6. Auto-drive with brake/gas/signal controls
-7. ElevenLabs instructor narration with native speech fallback
-8. Distraction simulation (3 difficulty tiers: calm / moderate / intense)
-9. Hotspots-only mode for long routes
-10. Post-drive recap with confidence score, hazard-by-hazard results, and stats
+4. 3D practice view (CesiumJS satellite globe) with driver-POV camera — Firefox black-screen fixed
+5. Free Street View rehearsal pass (`output=svembed`) — no Google Maps API key required
+6. Phone-as-steering-wheel via WebSocket pairing (4-letter room code)
+7. Automated drive simulation — no manual pause/resume/finish buttons
+8. ElevenLabs instructor narration with native speech fallback
+9. Distraction simulation (3 difficulty tiers: calm / moderate / intense)
+10. **Active listening** (Intense mode) — browser SpeechRecognition detects driver talking back to distractions
+11. Hotspots-only mode for long routes
+12. Post-drive recap with confidence score, hazard-by-hazard results, and stats
 
 ---
 
