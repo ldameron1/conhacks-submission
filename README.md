@@ -1,3 +1,5 @@
+Note: This project was created using vibe-coding techniques, including this very readme aside from this sentence and like one edit. It may be out of date.
+
 # RRR — Road Route Rehearsal
 
 **Practice any driving route from home before you brave it for real.**
@@ -66,7 +68,7 @@ On the backend, a minimal Node.js server paired with the `ws` library and an `ng
 | `scripts/connect-ccsecure.sh` | WPA2-Enterprise Wi-Fi config for hackathon venue (NetworkManager/PEAP) |
 
 ### AI Tools Used During Development
-Codex (GPT 5.5 / 5.4 / 5.4 Mini / 5.3-Codex), Gemini CLI (3.1 Pro / 3 Flash), Google Antigravity (Sonnet 4.5 / Opus 4.6 / Gemini 3 Flash), Cursor (Auto), Windsurf (Kimi K 2.6 / SWE 1.6), Google AI Studio (Gemini 3.1 Pro), Google AI Overviews, NotebookLM
+Codex (GPT 5.5 / 5.4 / 5.4 Mini / 5.3-Codex), Gemini CLI (3.1 Pro / 3 Flash), Google Antigravity (Sonnet 4.5 / Opus 4.6 / Gemini 3 Flash), Cursor (Auto), Windsurf (Kimi K 2.6 / SWE 1.6), Google AI Studio (Gemini 3.1 Pro), Google AI Overviews
 
 ---
 
