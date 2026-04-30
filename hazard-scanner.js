@@ -193,14 +193,34 @@ function describeLaneAdvice(step, maneuverModifier) {
   const modifier = (maneuverModifier || "").toLowerCase();
   const turnWord = modifier.includes("left") ? "left" : modifier.includes("right") ? "right" : "turn";
 
-  // Helper: position label for a single lane index
+  // Helper: position label for a single lane index (natural English)
   const posLabel = (idx) => {
     if (total === 1) return "the only lane";
     if (idx === 0) return "the leftmost lane";
     if (idx === total - 1) return "the rightmost lane";
     if (total === 3 && idx === 1) return "the middle lane";
     if (total === 2 && idx === 1) return "the right lane";
+    if (total === 4 && idx === 1) return "the 2nd lane from the left";
+    if (total === 4 && idx === 2) return "the 3rd lane from the left";
+    if (total >= 5 && idx === 1) return "the 2nd lane from the left";
+    if (total >= 5 && idx === total - 2) return "the 2nd lane from the right";
     return `lane ${idx + 1} from the left`;
+  };
+
+  // Helper: describe a group of contiguous lane indices (e.g., "the 2 rightmost lanes")
+  const groupLabel = (indices) => {
+    if (indices.length === 1) return posLabel(indices[0]);
+    if (indices[0] === 0 && indices[indices.length - 1] === indices.length - 1) {
+      if (indices.length === total) return "all lanes";
+      return `the ${indices.length} leftmost lanes`;
+    }
+    if (indices[indices.length - 1] === total - 1 && indices.length === total - indices[0]) {
+      return `the ${indices.length} rightmost lanes`;
+    }
+    if (indices.length === 2 && indices[1] - indices[0] === 1) {
+      return `${posLabel(indices[0])} or ${posLabel(indices[1])}`;
+    }
+    return indices.map(posLabel).join(" or ");
   };
 
   // Check if valid lanes are turn-dedicated (indications contain the turn direction)
@@ -211,21 +231,41 @@ function describeLaneAdvice(step, maneuverModifier) {
   if (validIndices.length === 1) {
     const pos = posLabel(validIndices[0]);
     const laneKind = isTurnDedicated ? `${turnWord} turn lane` : "lane";
-    const label = pos.includes("middle") || pos.includes("leftmost") || pos.includes("rightmost")
-      ? `Get in the ${pos.replace("the ", "")} ${laneKind} early`
+    const label = pos.includes("the ")
+      ? `Get in ${pos} ${laneKind} early`
       : `Get in ${pos} early`;
     const description = `You need to ${modifier} in the upcoming maneuver. The correct lane is ${pos} — it is a ${laneKind}.`;
     const tip = `Position yourself in ${pos} well before the intersection. You won't have time to change lanes last-minute.`;
     return { label, description, tip };
   }
 
-  // Multiple valid lanes
-  const positions = validIndices.map(posLabel).join(" or ");
+  // Multiple valid lanes — group contiguous lanes into descriptive clusters
+  const groups = [];
+  let start = 0;
+  for (let i = 1; i <= validIndices.length; i++) {
+    if (i === validIndices.length || validIndices[i] !== validIndices[i - 1] + 1) {
+      groups.push(validIndices.slice(start, i));
+      start = i;
+    }
+  }
+  const groupDesc = groups.map(groupLabel).join(" or ");
   const laneKind = isTurnDedicated ? `${turnWord} turn lanes` : "valid lanes";
-  const label = validIndices.length === 2 && validIndices[0] === 0 && validIndices[1] === 1 && turnWord === "left"
-    ? "Get in one of the two left turn lanes early"
-    : `Get in correct ${laneKind} early`;
-  const description = `You need to ${modifier}. You have ${validIndices.length} valid ${laneKind}: ${positions}. Choose the one that best matches your route.`;
+
+  // Build a concise label: e.g. "Get in one of the 2 rightmost left turn lanes early"
+  let label;
+  if (groups.length === 1 && groups[0].length > 1) {
+    const count = groups[0].length;
+    const side = groups[0][0] === 0 ? "leftmost" : groups[0][groups[0].length - 1] === total - 1 ? "rightmost" : "";
+    if (side) {
+      label = `Get in one of the ${count} ${side} ${laneKind} early`;
+    } else {
+      label = `Get in one of the ${count} ${laneKind} early`;
+    }
+  } else {
+    label = `Get in correct ${laneKind} early`;
+  }
+
+  const description = `You need to ${modifier}. You have ${validIndices.length} valid ${laneKind}: ${groupDesc}. Choose the one that best matches your route.`;
   const tip = `Move into the correct lane early — you have ${validIndices.length} valid options for this ${modifier}.`;
   return { label, description, tip };
 }
