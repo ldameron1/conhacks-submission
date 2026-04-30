@@ -335,7 +335,7 @@
         <div class="room-label">Room</div>
         <div class="room-code" id="room-code">----</div>
       </div>
-      <div style="font-size: 16px; color: var(--accent); font-weight: 800;" id="speed-display">0 km/h</div>
+      <div style="font-size: 16px; color: var(--accent); font-weight: 800; cursor: pointer; margin-right: 8px;" id="speed-display" title="Tap to toggle km/h ↔ mph">0 km/h</div>
       <button id="btn-disconnect" class="disconnect-btn">Disconnect</button>
     </div>
 
@@ -406,7 +406,7 @@
     const pedalGas = document.getElementById('pedal-gas');
     const sigLeft = document.getElementById('sig-left');
     const sigRight = document.getElementById('sig-right');
-    const speedValue = document.getElementById('speed-value');
+    const speedDisplay = document.getElementById('speed-display');
     const permOverlay = document.getElementById('perm-overlay');
     const btnPerm = document.getElementById('btn-perm');
 
@@ -420,6 +420,18 @@
     let signalRight = false;
     let lastSent = 0;
     let permGranted = false;
+    let useMetric = true; // km/h vs mph
+    let currentSpeedKmh = 0;
+
+    function updateSpeedDisplay() {
+      if (!speedDisplay) return;
+      if (useMetric) {
+        speedDisplay.textContent = currentSpeedKmh + ' km/h';
+      } else {
+        const mph = Math.round(currentSpeedKmh * 0.621371);
+        speedDisplay.textContent = mph + ' mph';
+      }
+    }
 
     /* ═══════ WebSocket ═══════ */
     function connect(code) {
@@ -445,8 +457,9 @@
           joinStatus.textContent = data.message;
           joinStatus.className = 'status-msg error';
         } else if (data.type === 'host_data') {
-          if (typeof data.speed === 'number' && speedValue) {
-            speedValue.textContent = data.speed + ' km/h';
+          if (typeof data.speed === 'number') {
+            currentSpeedKmh = data.speed;
+            updateSpeedDisplay();
           }
         }
       };
@@ -621,6 +634,14 @@
     });
 
     btnDisconnect.addEventListener('click', disconnect);
+
+    // Toggle km/h ↔ mph on speed display tap
+    if (speedDisplay) {
+      speedDisplay.addEventListener('click', () => {
+        useMetric = !useMetric;
+        updateSpeedDisplay();
+      });
+    }
 
     // Prevent zoom / double-tap
     document.addEventListener('gesturestart', (e) => e.preventDefault());

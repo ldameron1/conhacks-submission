@@ -10,7 +10,7 @@ const RUNTIME_CONFIG = window.__ROUTE_REHEARSAL_CONFIG__ || {};
 const CONFIG = {
   GEMINI_API_KEY: RUNTIME_CONFIG.GEMINI_API_KEY || "",
   OPENROUTER_API_KEY: RUNTIME_CONFIG.OPENROUTER_API_KEY || "",
-  OPENROUTER_MODEL: RUNTIME_CONFIG.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
+  OPENROUTER_MODEL: RUNTIME_CONFIG.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free",
   GOOGLE_MAPS_KEY: RUNTIME_CONFIG.GOOGLE_MAPS_KEY || "",
   ELEVENLABS_API_KEY: RUNTIME_CONFIG.ELEVENLABS_API_KEY || "",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
@@ -307,7 +307,7 @@ If the route is straightforward with no issues, respond []. Only output valid JS
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -352,7 +352,7 @@ async function analyzeWithOpenRouter(prompt) {
         "X-Title": "Road Route Rehearsal"
       },
       body: JSON.stringify({
-        model: CONFIG.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
+        model: CONFIG.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free",
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -365,6 +365,37 @@ async function analyzeWithOpenRouter(prompt) {
     console.warn("OpenRouter fallback failed:", e);
   }
   return null;
+}
+
+/* ═══════════════════ ROUTE SAVE/LOAD ═══════════════════ */
+function saveRoute() {
+  const routeData = {
+    isCachedState: true,
+    title: `${state.origin.label} to ${state.destination.label}`,
+    origin: state.origin,
+    destination: state.destination,
+    routeCoords: state.routeCoords,
+    routeSteps: state.routeSteps,
+    routeDistance: state.routeDistance,
+    routeDuration: state.routeDuration,
+    hazards: state.hazards,
+    hazardSummary: state.hazardSummary,
+    geminiInsights: state.geminiInsights
+  };
+
+  const blob = new Blob([JSON.stringify(routeData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `route-${state.origin.label.replace(/[^a-z0-9]/gi, '-')}-to-${state.destination.label.replace(/[^a-z0-9]/gi, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Route saved!');
+}
+
+function loadRouteFromFile() {
+  const input = $("file-load-route");
+  input.click();
 }
 
 /* ═══════════════════ SCANNING FLOW ═══════════════════ */
@@ -1293,7 +1324,10 @@ function startManualDrive() {
     }
 
     const maxProgress = state.routeCoords.length - 1;
-    const speedKmh = Math.round(manualDriveSpeed * 400 * 60);
+    
+    // Get actual speed from cesium-view
+    const actualSpeed = cesiumInitialized ? cesiumView.getSpeed() : manualDriveSpeed;
+    const speedKmh = Math.round(actualSpeed * 400 * 60);
 
     if (cesiumInitialized) {
       const progress = cesiumView.getProgress();
@@ -1629,11 +1663,9 @@ function renderDemoRoutes() {
   });
 }
 
-async function loadDemoRoute(file) {
+async function loadDemoRoute(file, dataOverride = null) {
   try {
-    const res = await fetch(file);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = dataOverride || await (await fetch(file)).json();
 
     if (data.isCachedState) {
       state.origin = data.origin;
@@ -1899,6 +1931,23 @@ function wireEvents() {
   $("btn-new-route").addEventListener("click", () => {
     resetAppState();
     showScreen("input");
+  });
+  $("btn-save-route").addEventListener("click", saveRoute);
+  $("btn-load-route").addEventListener("click", loadRouteFromFile);
+  
+  // Handle file input for loading routes
+  $("file-load-route").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await loadDemoRoute(null, data);
+      e.target.value = ''; // Reset input
+    } catch (err) {
+      showToast('Failed to load route: ' + err.message);
+    }
   });
 
   // Mode toggle buttons

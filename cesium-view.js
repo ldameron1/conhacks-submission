@@ -39,10 +39,10 @@ let lastAlertedHazard = -1;
 
 // Manual drive physics
 let currentSpeed = 0;       // index units per frame
-const ACCEL_RATE = 0.0002;   // speed increase per frame when gas held
+const ACCEL_RATE = 0.0006;   // speed increase per frame when gas held (increased)
 const COAST_DECAY = 0.002;  // speed decrease per frame when no input
 const BRAKE_DECAY = 0.006;  // speed decrease per frame when brake held
-const MAX_SPEED = 0.02;     // max index units per frame
+const MAX_SPEED = 0.04;     // max index units per frame (~60 km/h speed limit)
 
 /* ═══════════════ MATH HELPERS ═══════════════ */
 
@@ -155,19 +155,20 @@ export async function initView(containerId, coords, hazards, cbs, options = {}) 
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#1a1e2e");
   }
 
-  // Build route polyline with fixed height above ellipsoid
+  // Build route polyline - clamp to ground for visibility
   const positions = routeCoords.map((c) => {
-    return Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 20);
+    return Cesium.Cartesian3.fromDegrees(c.lng, c.lat, 0);
   });
   routeEntity = viewer.entities.add({
     polyline: {
       positions: positions,
-      width: hasPhotorealistic ? 8 : 6,
+      width: hasPhotorealistic ? 10 : 8,
       material: new Cesium.PolylineGlowMaterialProperty({
-        glowPower: 0.3,
+        glowPower: 0.4,
         color: Cesium.Color.fromCssColorString("#00d4aa"),
       }),
-      clampToGround: false,
+      clampToGround: true,
+      zIndex: 1000, // Ensure it's on top
     },
   });
 
@@ -228,22 +229,25 @@ export async function initView(containerId, coords, hazards, cbs, options = {}) 
   });
 
   // Driver position marker (visible in overview mode) — triangle rotates with heading
-  const triangleSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"%3E%3Cpolygon points="12,2 22,22 2,22" fill="%23ffdd00" stroke="%23000" stroke-width="2"/%3E%3C/svg%3E';
+  // Red triangle pointing up (🔺 style)
+  const triangleSvg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"%3E%3Cpolygon points="12,2 22,22 2,22" fill="%23ff4466" stroke="%23ffffff" stroke-width="2"/%3E%3C/svg%3E';
   positionMarker = viewer.entities.add({
     position: Cesium.Cartesian3.fromDegrees(routeCoords[0].lng, routeCoords[0].lat, DRIVER_HEIGHT + 5),
     billboard: {
       image: triangleSvg,
-      scale: 0.7,
+      scale: 0.8,
       rotation: new Cesium.CallbackProperty(() => {
-        const h = getRouteHeading(routeProgress);
-        return Cesium.Math.toRadians(-h);
+        const h = getRouteHeading(routeProgress) + headingOffset;
+        // Rotate so triangle points in direction of travel
+        // SVG triangle points up (0°), so subtract 90° to align with heading
+        return Cesium.Math.toRadians(-(h - 90));
       }, false),
       alignedAxis: Cesium.Cartesian3.UNIT_Z,
     },
     label: {
-      text: "▶ YOU",
+      text: "YOU",
       font: "bold 12px sans-serif",
-      fillColor: Cesium.Color.YELLOW,
+      fillColor: Cesium.Color.fromCssColorString("#ff4466"),
       style: Cesium.LabelStyle.FILL_AND_OUTLINE,
       outlineWidth: 2,
       outlineColor: Cesium.Color.BLACK,
@@ -573,14 +577,14 @@ function initMiniMap() {
   const latLngs = routeCoords.map(c => [c.lat, c.lng]);
   leafletRoute = L.polyline(latLngs, { color: "#00d4aa", weight: 3, opacity: 0.6 }).addTo(leafletMap);
 
-  // You marker
-  leafletMarker = L.divIcon({
+  // Red triangle marker (🔺 style)
+  const triangleIcon = L.divIcon({
     className: "minimap-marker",
-    html: `<div style="width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:12px solid #00d4aa; filter:drop-shadow(0 0 4px #00d4aa);"></div>`,
-    iconSize: [12, 12],
-    iconAnchor: [6, 10]
+    html: `<div style="width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:16px solid #ff4466; filter:drop-shadow(0 0 4px #ff4466);"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 14]
   });
-  leafletMarker = L.marker([routeCoords[0].lat, routeCoords[0].lng], { icon: leafletMarker }).addTo(leafletMap);
+  leafletMarker = L.marker([routeCoords[0].lat, routeCoords[0].lng], { icon: triangleIcon }).addTo(leafletMap);
 }
 
 function updateMiniMapCamera() {
@@ -696,12 +700,12 @@ function handleMovementKeys() {
       headingOffset = Math.min(headingOffset + LOOK_SPEED, maxDrift);
     }
     else {
-      // Smooth return to center when not turning
-      headingOffset *= 0.92;
+      // Smooth return to center when not turning (more aggressive)
+      headingOffset *= 0.88;
     }
     // Center look (Space)
     if (keysDown.has(" ")) {
-      headingOffset *= 0.85;
+      headingOffset *= 0.80;
     }
   }
 }
