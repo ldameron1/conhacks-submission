@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terrain Calibration Test</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui; background: #0a0e17; color: #fff; }
+    #cesiumContainer { width: 100vw; height: 100vh; }
+    #controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 8px;
+      z-index: 1000;
+      max-width: 400px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      background: #00d4aa;
+      border: none;
+      border-radius: 4px;
+      color: #0a0e17;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { background: #00ffcc; }
+    #log {
+      margin-top: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: monospace;
+      background: #000;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .log-entry { margin: 2px 0; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="controls">
+    <h2>Terrain Calibration Test</h2>
+    <button onclick="runTest()">Run 10-City Test</button>
+    <button onclick="testSingleLocation()">Test Toronto</button>
+    <button onclick="clearLog()">Clear Log</button>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5N2UyMjcwOS00MDY1LTQxYjEtYjZjMy00YTU0ZTg5MmViYWQiLCJpZCI6ODAzMDYsImlhdCI6MTY0Mjc5ODc1MX0.dkwAL1CcljUV7NA7fDbhXXnmyZQU_c-G5zRx8PtEcxE';
+
+    let viewer;
+    
+    // Initialize viewer after page load
+    window.addEventListener('DOMContentLoaded', () => {
+      viewer = new Cesium.Viewer('cesiumContainer', {
+        imageryProvider: new Cesium.IonImageryProvider({ assetId: 2 }),
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        animation: false,
+        timeline: false
+      });
+
+      // Enable Google Photorealistic 3D Tiles
+      const tileset = viewer.scene.primitives.add(
+        new Cesium.Cesium3DTileset({
+          url: Cesium.IonResource.fromAssetId(2275207),
+          showCreditsOnScreen: true
+        })
+      );
+      
+      log('Viewer initialized. Ready to test!');
+    });
+
+    function log(msg) {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    async function testSingleLocation() {
+      if (!viewer) {
+        log('ERROR: Viewer not initialized yet. Wait a moment and try again.');
+        return;
+      }
+      
+      const lat = 43.6532, lng = -79.3832, name = 'Toronto';
+      log(`Testing ${name}...`);
+      
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+        point: {
+          pixelSize: 10,
+          color: Cesium.Color.RED,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+        }
+      });
+
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 500),
+        duration: 2
+      });
+
+      setTimeout(() => {
+        let clampedHeight = null;
+        if (entity && entity.position) {
+          const clampedPos = entity.position.getValue(Cesium.JulianDate.now());
+          if (clampedPos) {
+            const cartographic = Cesium.Cartographic.fromCartesian(clampedPos);
+            clampedHeight = cartographic.height;
+          }
+        }
+
+        const highPosition = Cesium.Cartesian3.fromDegrees(lng, lat, 500);
+        const windowPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, highPosition);
+        let raycastHeight = null;
+        if (windowPos) {
+          const pickedPosition = viewer.scene.pickPosition(windowPos);
+          if (pickedPosition) {
+            const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedPosition);
+            raycastHeight = pickedCartographic.height;
+          }
+        }
+
+        log(`${name}: clamped=${clampedHeight?.toFixed(2)}m, raycast=${raycastHeight?.toFixed(2)}m`);
+        if (clampedHeight && raycastHeight) {
+          log(`Offset: ${(raycastHeight - clampedHeight).toFixed(2)}m`);
+        }
+      }, 10000);
+    }
+
+    async function testLocation(lat, lng, name) {
+      return new Promise((resolve) => {
+        const entity = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+          point: {
+            pixelSize: 1,
+            color: Cesium.Color.TRANSPARENT,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+          }
+        });
+
+        setTimeout(() => {
+          let clampedHeight = null;
+          if (entity && entity.position) {
+            const clampedPos = entity.position.getValue(Cesium.JulianDate.now());
+            if (clampedPos) {
+              const cartographic = Cesium.Cartographic.fromCartesian(clampedPos);
+              clampedHeight = cartographic.height;
+            }
+          }
+
+          const highPosition = Cesium.Cartesian3.fromDegrees(lng, lat, 500);
+          const windowPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, highPosition);
+          let raycastHeight = null;
+          if (windowPos) {
+            const pickedPosition = viewer.scene.pickPosition(windowPos);
+            if (pickedPosition) {
+              const pickedCartographic = Cesium.Cartographic.fromCartesian(pickedPosition);
+              raycastHeight = pickedCartographic.height;
+            }
+          }
+
+          viewer.entities.remove(entity);
+
+          const result = {
+            name, lat, lng, clampedHeight, raycastHeight,
+            offset: (clampedHeight && raycastHeight) ? (raycastHeight - clampedHeight) : null
+          };
+
+          log(`${name}: clamped=${clampedHeight?.toFixed(2)}m, raycast=${raycastHeight?.toFixed(2)}m, offset=${result.offset?.toFixed(2)}m`);
+          resolve(result);
+        }, 10000);
+      });
+    }
+
+    async function runTest() {
+      if (!viewer) {
+        log('ERROR: Viewer not initialized yet. Wait a moment and try again.');
+        return;
+      }
+      
+      const locations = [
+        { name: 'Toronto', lat: 43.6532, lng: -79.3832 },
+        { name: 'New York', lat: 40.7580, lng: -73.9855 },
+        { name: 'Los Angeles', lat: 34.0522, lng: -118.2437 },
+        { name: 'Chicago', lat: 41.8781, lng: -87.6298 },
+        { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+        { name: 'London', lat: 51.5074, lng: -0.1278 },
+        { name: 'Paris', lat: 48.8566, lng: 2.3522 },
+        { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
+        { name: 'Sydney', lat: -33.8688, lng: 151.2093 },
+        { name: 'Dubai', lat: 25.2048, lng: 55.2708 }
+      ];
+
+      log('Starting 10-city test (10 seconds per city = ~100 seconds)...');
+      const results = [];
+
+      for (const loc of locations) {
+        const result = await testLocation(loc.lat, loc.lng, loc.name);
+        results.push(result);
+      }
+
+      const validOffsets = results.filter(r => r.offset !== null).map(r => r.offset);
+      if (validOffsets.length > 0) {
+        const avg = validOffsets.reduce((sum, o) => sum + o, 0) / validOffsets.length;
+        const min = Math.min(...validOffsets);
+        const max = Math.max(...validOffsets);
+        const stdDev = Math.sqrt(validOffsets.reduce((sum, o) => sum + Math.pow(o - avg, 2), 0) / validOffsets.length);
+
+        log('===== RESULTS =====');
+        log(`Valid samples: ${validOffsets.length}/${results.length}`);
+        log(`Average offset: ${avg.toFixed(2)}m`);
+        log(`Range: ${min.toFixed(2)}m to ${max.toFixed(2)}m`);
+        log(`Std dev: ${stdDev.toFixed(2)}m`);
+
+        if (Math.abs(max - min) < 5) {
+          log(`✓ Offset is consistent! Use clampedHeight + ${avg.toFixed(2)}m`);
+        } else {
+          log(`✗ Offset varies too much. Need per-city calibration.`);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

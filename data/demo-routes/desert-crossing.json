@@ -1,0 +1,13 @@
+{
+  "origin": {
+    "lat": 33.4484,
+    "lng": -112.0740,
+    "label": "Phoenix, Arizona"
+  },
+  "destination": {
+    "lat": 31.7619,
+    "lng": -106.4850,
+    "label": "El Paso, Texas"
+  },
+  "description": "Extreme isolation hazard: 400+ mile desert crossing through Sonoran and Chihuahuan deserts. Tests driver preparedness for long stretches with minimal services, extreme heat zones, and emergency planning."
+}

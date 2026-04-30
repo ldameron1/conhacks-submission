@@ -1,0 +1,13 @@
+{
+  "origin": {
+    "lat": 42.3314,
+    "lng": -83.0458,
+    "label": "Detroit, Michigan"
+  },
+  "destination": {
+    "lat": 43.0896,
+    "lng": -79.0849,
+    "label": "Niagara Falls, Ontario"
+  },
+  "description": "Long-distance drive across the US-Canada border. Tests sustained highway driving, border crossing navigation, and multi-hour route rehearsal."
+}

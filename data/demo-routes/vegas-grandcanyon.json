@@ -1,0 +1,13 @@
+{
+  "origin": {
+    "lat": 36.1699,
+    "lng": -115.1398,
+    "label": "Las Vegas, Nevada"
+  },
+  "destination": {
+    "lat": 36.0544,
+    "lng": -112.1401,
+    "label": "Grand Canyon Village, Arizona"
+  },
+  "description": "Scenic long-distance drive from Vegas to the Grand Canyon South Rim. Tests navigation through desert highways, elevation changes, and tourist destination approaches."
+}

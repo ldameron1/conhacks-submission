@@ -9,6 +9,8 @@ import * as phoneBridge from "./phone-bridge.js?v=3";
 const RUNTIME_CONFIG = window.__ROUTE_REHEARSAL_CONFIG__ || {};
 const CONFIG = {
   GEMINI_API_KEY: RUNTIME_CONFIG.GEMINI_API_KEY || "",
+  OPENROUTER_API_KEY: RUNTIME_CONFIG.OPENROUTER_API_KEY || "",
+  OPENROUTER_MODEL: RUNTIME_CONFIG.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
   GOOGLE_MAPS_KEY: RUNTIME_CONFIG.GOOGLE_MAPS_KEY || "",
   ELEVENLABS_API_KEY: RUNTIME_CONFIG.ELEVENLABS_API_KEY || "",
   OSRM_URL: "https://router.project-osrm.org/route/v1/driving",
@@ -243,7 +245,7 @@ function getHazardEmoji(h) {
 }
 
 function makeHazardIcon(h, active = false) {
-  const emoji = getHazardEmoji(h);
+  const emoji = h.source === "gemini" ? "♊" : getHazardEmoji(h);
   const size = active ? 32 : 22;
   const color = h.severity === "high" ? "#ff4466" : h.severity === "medium" ? "#ffaa00" : "#66bbff";
   return L.divIcon({
@@ -257,8 +259,14 @@ function makeHazardIcon(h, active = false) {
 /* ═══════════════════ GEMINI AI ═══════════════════ */
 async function analyzeWithGemini(steps, geometryHazards) {
   if (!CONFIG.GEMINI_API_KEY) return null;
+  
+  // For long routes, analyze more steps and return more hazards
+  const isLongRoute = steps.length > 50;
+  const stepsToAnalyze = isLongRoute ? 100 : 30;
+  const maxHazards = isLongRoute ? 20 : 6;
+  
   const stepsText = steps
-    .slice(0, 30)
+    .slice(0, stepsToAnalyze)
     .map((s, i) => {
       const lanes = s.intersections?.[0]?.lanes;
       const laneInfo = lanes && lanes.length
@@ -292,7 +300,7 @@ Look for these specific issues that confuse real drivers:
 
 5. ROAD LAYOUT SURPRISES: One-way streets, roads that suddenly change from 2 lanes to 1, or intersections where the "straight" path actually curves.
 
-For each issue you find (max 6), respond as a JSON array. Be specific and practical — give advice a driving instructor would give:
+For each issue you find (max ${maxHazards}), respond as a JSON array. Be specific and practical — give advice a driving instructor would give:
 [{"title":"Short specific title","reason":"Why this confuses drivers (1-2 sentences)","tip":"Exactly what to do — which lane, when to move, what to look for","severity":"low|medium|high","stepIndex":N}]
 
 If the route is straightforward with no issues, respond []. Only output valid JSON.`;
@@ -309,12 +317,52 @@ If the route is straightforward with no issues, respond []. Only output valid JS
       }
     );
     const data = await res.json();
+    
+    // Check for quota exhaustion
+    if (data.error && data.error.code === 429) {
+      console.warn("Gemini quota exhausted, trying OpenRouter fallback...");
+      return await analyzeWithOpenRouter(prompt);
+    }
+    
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
     // Extract JSON from response (may be wrapped in markdown code block)
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) return JSON.parse(jsonMatch[0]);
   } catch (e) {
     console.warn("Gemini analysis failed:", e);
+    // Try OpenRouter fallback
+    if (CONFIG.OPENROUTER_API_KEY) {
+      console.log("Attempting OpenRouter fallback...");
+      return await analyzeWithOpenRouter(prompt);
+    }
+  }
+  return null;
+}
+
+async function analyzeWithOpenRouter(prompt) {
+  if (!CONFIG.OPENROUTER_API_KEY) return null;
+  
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${CONFIG.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "Road Route Rehearsal"
+      },
+      body: JSON.stringify({
+        model: CONFIG.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content || "[]";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    console.warn("OpenRouter fallback failed:", e);
   }
   return null;
 }
@@ -537,7 +585,7 @@ function renderHazardList() {
       <div class="hazard-header">
         <span class="hazard-badge ${h.severity}">${h.severity}</span>
         <span class="hazard-type">${h.type.replace(/_/g, " ")}</span>
-        ${h.source === "gemini" ? '<span class="ai-badge">AI</span>' : h.source === "overpass" ? '<span class="osm-badge">OSM</span>' : h.source === "geometry" ? '<span class="geo-badge">GEO</span>' : ""}
+        ${h.source === "gemini" ? '<span class="ai-badge">♊ Gemini</span>' : h.source === "overpass" ? '<span class="osm-badge">OSM</span>' : h.source === "geometry" ? '<span class="geo-badge">GEO</span>' : ""}
       </div>
       <h3 class="hazard-title">${h.label}</h3>
       <p class="hazard-desc">${h.description}</p>
@@ -1565,6 +1613,9 @@ function renderExamples() {
 const DEMO_ROUTES = [
   { file: "data/demo-routes/downtown-garage.json", label: "Downtown Garage" },
   { file: "data/demo-routes/airport-merge.json", label: "Airport Merge" },
+  { file: "data/demo-routes/detroit-niagara.json", label: "🚗 Detroit → Niagara Falls" },
+  { file: "data/demo-routes/desert-crossing.json", label: "🏜️ Desert Crossing (Isolation)" },
+  { file: "data/demo-routes/vegas-grandcanyon.json", label: "🎰 Vegas → Grand Canyon" },
 ];
 
 function renderDemoRoutes() {
