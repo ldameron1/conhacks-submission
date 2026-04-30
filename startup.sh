@@ -127,7 +127,7 @@ stop_port_processes() {
 while true; do
   echo ""
   echo "=== Road Route Rehearsal Startup Menu ==="
-  echo "1) Start public mode with ngrok (internet pairing)"
+  echo "1) Start server (local network pairing)"
   echo "2) Show server status"
   echo "3) Stop process using port $PORT (aggressive)"
   echo "4) Exit"
